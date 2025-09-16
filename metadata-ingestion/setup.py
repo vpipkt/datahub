@@ -713,8 +713,8 @@ base_dev_requirements = {
             "salesforce",
             "unity-catalog",
             "nifi",
-            "vertica",,
-            "airbyte"
+            "vertica",
+            "airbyte",
             "mode",
             "fivetran",
             "kafka-connect",
