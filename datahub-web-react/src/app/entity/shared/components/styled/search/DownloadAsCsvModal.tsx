@@ -1,14 +1,19 @@
+import { LoadingOutlined } from '@ant-design/icons';
+import { Button, Input, Modal, Spin, notification } from 'antd';
 import React, { useState } from 'react';
 import { useLocation } from 'react-router';
-import { Button, Input, Modal, Spin, notification } from 'antd';
-import { LoadingOutlined } from '@ant-design/icons';
-import { AndFilterInput } from '../../../../../../types.generated';
-import { getSearchCsvDownloadHeader, transformResultsToCsvRow } from './downloadAsCsvUtil';
-import { downloadRowsAsCsv } from '../../../../../search/utils/csvUtils';
-import { useEntityRegistry } from '../../../../../useEntityRegistry';
-import { useEntityData } from '../../../EntityContext';
-import analytics, { EventType } from '../../../../../analytics';
-import { DownloadSearchResultsInput, DownloadSearchResults } from '../../../../../search/utils/types';
+
+import analytics, { EventType } from '@app/analytics';
+import { useEntityData } from '@app/entity/shared/EntityContext';
+import {
+    getSearchCsvDownloadHeader,
+    transformResultsToCsvRow,
+} from '@app/entity/shared/components/styled/search/downloadAsCsvUtil';
+import { downloadRowsAsCsv } from '@app/search/utils/csvUtils';
+import { DownloadSearchResults, DownloadSearchResultsInput } from '@app/search/utils/types';
+import { useEntityRegistry } from '@app/useEntityRegistry';
+
+import { AndFilterInput } from '@types';
 
 type Props = {
     downloadSearchResults: (input: DownloadSearchResultsInput) => Promise<DownloadSearchResults | null | undefined>;
@@ -21,7 +26,7 @@ type Props = {
     setShowDownloadAsCsvModal: (showDownloadAsCsvModal: boolean) => any;
 };
 
-const SEARCH_PAGE_SIZE_FOR_DOWNLOAD = 500;
+const SEARCH_PAGE_SIZE_FOR_DOWNLOAD = 200;
 
 export default function DownloadAsCsvModal({
     downloadSearchResults,
@@ -123,13 +128,14 @@ export default function DownloadAsCsvModal({
             centered
             onCancel={() => setShowDownloadAsCsvModal(false)}
             title="Download as..."
-            visible={showDownloadAsCsvModal}
+            open={showDownloadAsCsvModal}
             footer={
                 <>
                     <Button onClick={() => setShowDownloadAsCsvModal(false)} type="text">
                         Close
                     </Button>
                     <Button
+                        data-testid="csv-modal-download-button"
                         onClick={() => {
                             setShowDownloadAsCsvModal(false);
                             triggerCsvDownload(saveAsTitle);
@@ -142,6 +148,7 @@ export default function DownloadAsCsvModal({
             }
         >
             <Input
+                data-testid="download-as-csv-input"
                 placeholder="datahub.csv"
                 value={saveAsTitle}
                 onChange={(e) => {

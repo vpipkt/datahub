@@ -1,4 +1,4 @@
-import { EntityType } from '../../../types.generated';
+import { EntityType } from '@types';
 
 // TODO(Gabe): integrate this w/ the theme
 export const REDESIGN_COLORS = {
@@ -21,6 +21,7 @@ export const ANTD_GRAY = {
 };
 
 export const ANTD_GRAY_V2 = {
+    1: '#F8F9Fa',
     2: '#F3F5F6',
     5: '#DDE0E4',
     6: '#B2B8BD',
@@ -76,6 +77,14 @@ export const EMPTY_MESSAGES = {
     'inherited by': {
         title: 'Is not inherited by any terms',
         description: 'Terms can be inherited by other terms to represent an "Is A" style relationship.',
+    },
+    businessAttributes: {
+        title: 'No business attributes added yet',
+        description: 'Add business attributes to entities to classify their data.',
+    },
+    mlModel: {
+        title: 'No ML models',
+        description: 'ML models will appear here if they are associated with this ML model group.',
     },
 };
 

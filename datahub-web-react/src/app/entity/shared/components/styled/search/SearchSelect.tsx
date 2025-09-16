@@ -1,20 +1,23 @@
-import React, { useState } from 'react';
-import { Button, message, Typography } from 'antd';
-import styled from 'styled-components';
 import { FilterOutlined } from '@ant-design/icons';
+import { Button, Typography, message } from 'antd';
+import { debounce } from 'lodash';
+import React, { useState } from 'react';
+import styled from 'styled-components';
 
-import { useEntityRegistry } from '../../../../../useEntityRegistry';
-import { EntityType, FacetFilterInput, FilterOperator } from '../../../../../../types.generated';
-import { ENTITY_FILTER_NAME, UnionType } from '../../../../../search/utils/constants';
-import { SearchCfg } from '../../../../../../conf';
-import { EmbeddedListSearchResults } from './EmbeddedListSearchResults';
-import { useGetSearchResultsForMultipleQuery } from '../../../../../../graphql/search.generated';
-import { isListSubset } from '../../../utils';
-import { SearchBar } from '../../../../../search/SearchBar';
-import { ANTD_GRAY } from '../../../constants';
-import { EntityAndType } from '../../../types';
-import { SearchSelectBar } from './SearchSelectBar';
-import TabToolbar from '../TabToolbar';
+import TabToolbar from '@app/entity/shared/components/styled/TabToolbar';
+import { EmbeddedListSearchResults } from '@app/entity/shared/components/styled/search/EmbeddedListSearchResults';
+import { SearchSelectBar } from '@app/entity/shared/components/styled/search/SearchSelectBar';
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+import { EntityAndType } from '@app/entity/shared/types';
+import { isListSubset } from '@app/entity/shared/utils';
+import { SearchBar } from '@app/search/SearchBar';
+import { ENTITY_FILTER_NAME, UnionType } from '@app/search/utils/constants';
+import { DEBOUNCE_SEARCH_MS } from '@app/shared/constants';
+import { useEntityRegistry } from '@app/useEntityRegistry';
+import { SearchCfg } from '@src/conf';
+
+import { useGetSearchResultsForMultipleQuery } from '@graphql/search.generated';
+import { EntityType, FacetFilterInput, FilterOperator } from '@types';
 
 const Container = styled.span`
     display: flex;
@@ -45,6 +48,8 @@ type Props = {
     placeholderText?: string | null;
     selectedEntities: EntityAndType[];
     setSelectedEntities: (Entities: EntityAndType[]) => void;
+    singleSelect?: boolean;
+    hideToolbar?: boolean;
 };
 
 /**
@@ -54,7 +59,14 @@ type Props = {
  * This component provides easy ways to filter for a specific set of entity types, and provides a set of entity urns
  * when the selection is complete.
  */
-export const SearchSelect = ({ fixedEntityTypes, placeholderText, selectedEntities, setSelectedEntities }: Props) => {
+export const SearchSelect = ({
+    fixedEntityTypes,
+    placeholderText,
+    selectedEntities,
+    setSelectedEntities,
+    singleSelect,
+    hideToolbar,
+}: Props) => {
     const entityRegistry = useEntityRegistry();
 
     // Component state
@@ -102,9 +114,9 @@ export const SearchSelect = ({ fixedEntityTypes, placeholderText, selectedEntiti
     const selectedEntityUrns = selectedEntities.map((entity) => entity.urn);
     const facets = searchAcrossEntities?.facets || [];
 
-    const onSearch = (q: string) => {
+    const onSearch = debounce((q: string) => {
         setQuery(q);
-    };
+    }, DEBOUNCE_SEARCH_MS);
 
     const onChangeFilters = (newFilters: Array<FacetFilterInput>) => {
         setPage(1);
@@ -160,16 +172,18 @@ export const SearchSelect = ({ fixedEntityTypes, placeholderText, selectedEntiti
                     entityRegistry={entityRegistry}
                 />
             </SearchBarContainer>
-            <TabToolbar>
-                <SearchSelectBar
-                    isSelectAll={selectedEntities.length > 0 && isListSubset(searchResultUrns, selectedEntityUrns)}
-                    onChangeSelectAll={onChangeSelectAll}
-                    showCancel={false}
-                    showActions={false}
-                    refetch={refetch}
-                    selectedEntities={selectedEntities}
-                />
-            </TabToolbar>
+            {!hideToolbar && (
+                <TabToolbar>
+                    <SearchSelectBar
+                        isSelectAll={selectedEntities.length > 0 && isListSubset(searchResultUrns, selectedEntityUrns)}
+                        onChangeSelectAll={onChangeSelectAll}
+                        showCancel={false}
+                        showActions={false}
+                        refetch={refetch}
+                        selectedEntities={selectedEntities}
+                    />
+                </TabToolbar>
+            )}
             <EmbeddedListSearchResults
                 loading={loading}
                 searchResponse={searchAcrossEntities}
@@ -186,6 +200,7 @@ export const SearchSelect = ({ fixedEntityTypes, placeholderText, selectedEntiti
                 isSelectMode
                 selectedEntities={selectedEntities}
                 setSelectedEntities={setSelectedEntities}
+                singleSelect={singleSelect}
             />
         </Container>
     );

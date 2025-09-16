@@ -1,10 +1,11 @@
-import React, { useMemo } from 'react';
+import { AxisBottom } from '@visx/axis';
+import { Group } from '@visx/group';
+import { scaleUtc } from '@visx/scale';
+import { Bar } from '@visx/shape';
 import { Popover } from 'antd';
-import { Bar } from '@vx/shape';
-import { Group } from '@vx/group';
-import { AxisBottom } from '@vx/axis';
-import { scaleUtc } from '@vx/scale';
-import { ANTD_GRAY } from '../../../constants';
+import React, { useMemo } from 'react';
+
+import { ANTD_GRAY } from '@app/entity/shared/constants';
 
 export type BooleanResult = {
     result: boolean;

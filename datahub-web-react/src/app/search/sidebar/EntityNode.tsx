@@ -1,20 +1,26 @@
+import { Typography } from 'antd';
 import React from 'react';
 import styled from 'styled-components';
-import { Typography } from 'antd';
-import { ANTD_GRAY } from '../../entity/shared/constants';
-import { useEntityRegistry } from '../../useEntityRegistry';
-import { IconStyleType } from '../../entity/Entity';
-import { formatNumber } from '../../shared/formatNumber';
-import ExpandableNode from './ExpandableNode';
-import EnvironmentNode from './EnvironmentNode';
-import useAggregationsQuery from './useAggregationsQuery';
-import { MAX_COUNT_VAL, ORIGIN_FILTER_NAME, PLATFORM_FILTER_NAME } from '../utils/constants';
-import PlatformNode from './PlatformNode';
-import SidebarLoadingError from './SidebarLoadingError';
-import useToggle from '../../shared/useToggle';
-import { BrowseProvider, useEntityAggregation, useEntityType, useIsEntitySelected } from './BrowseContext';
-import useSidebarAnalytics from './useSidebarAnalytics';
-import { useHasFilterField } from './SidebarContext';
+
+import { IconStyleType } from '@app/entity/Entity';
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+import {
+    BrowseProvider,
+    useEntityAggregation,
+    useEntityType,
+    useIsEntitySelected,
+} from '@app/search/sidebar/BrowseContext';
+import EnvironmentNode from '@app/search/sidebar/EnvironmentNode';
+import ExpandableNode from '@app/search/sidebar/ExpandableNode';
+import PlatformNode from '@app/search/sidebar/PlatformNode';
+import { useHasFilterField } from '@app/search/sidebar/SidebarContext';
+import SidebarLoadingError from '@app/search/sidebar/SidebarLoadingError';
+import useAggregationsQuery from '@app/search/sidebar/useAggregationsQuery';
+import useSidebarAnalytics from '@app/search/sidebar/useSidebarAnalytics';
+import { MAX_COUNT_VAL, ORIGIN_FILTER_NAME, PLATFORM_FILTER_NAME } from '@app/search/utils/constants';
+import { formatNumber } from '@app/shared/formatNumber';
+import useToggle from '@app/shared/useToggle';
+import { useEntityRegistry } from '@app/useEntityRegistry';
 
 const Count = styled(Typography.Text)`
     font-size: 12px;
@@ -22,7 +28,11 @@ const Count = styled(Typography.Text)`
     padding-left: 4px;
 `;
 
-const EntityNode = () => {
+interface EntityNodeProps {
+    sortBy: string;
+}
+
+const EntityNode: React.FC<EntityNodeProps> = ({ sortBy }) => {
     const isSelected = useIsEntitySelected();
     const entityType = useEntityType();
     const entityAggregation = useEntityAggregation();
@@ -38,7 +48,8 @@ const EntityNode = () => {
         onToggle: (isNowOpen: boolean) => trackToggleNodeEvent(isNowOpen, 'entity'),
     });
 
-    const onClickHeader = () => {
+    const onClickHeader = (e) => {
+        e.preventDefault();
         if (count) toggle();
     };
 
@@ -82,7 +93,7 @@ const EntityNode = () => {
                                   entityAggregation={entityAggregation}
                                   environmentAggregation={environmentAggregation}
                               >
-                                  <EnvironmentNode />
+                                  <EnvironmentNode sortBy={sortBy} />
                               </BrowseProvider>
                           ))
                         : platformAggregations?.map((platformAggregation) => (
@@ -91,7 +102,7 @@ const EntityNode = () => {
                                   entityAggregation={entityAggregation}
                                   platformAggregation={platformAggregation}
                               >
-                                  <PlatformNode />
+                                  <PlatformNode sortBy={sortBy} />
                               </BrowseProvider>
                           ))}
                     {error && <SidebarLoadingError onClickRetry={retry} />}

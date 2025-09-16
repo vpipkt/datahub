@@ -1,12 +1,13 @@
-import React from 'react';
 import { CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
+import React from 'react';
+
 import {
     AssertionResultType,
     AssertionStdParameter,
     AssertionStdParameterType,
     DatasetAssertionInfo,
     StringMapEntry,
-} from '../../../../../../types.generated';
+} from '@types';
 
 /**
  * Utility methods
@@ -18,7 +19,7 @@ export const sortAssertions = (a, b) => {
     if (!b.runEvents?.runEvents?.length) {
         return -1;
     }
-    return b.runEvents.runEvents[0].timestampMillis - a.runEvents.runEvents[0].timestampMillis;
+    return b.runEvents?.runEvents[0]?.timestampMillis - a.runEvents?.runEvents[0]?.timestampMillis;
 };
 
 /**

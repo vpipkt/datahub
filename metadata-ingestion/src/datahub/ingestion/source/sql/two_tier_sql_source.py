@@ -1,8 +1,10 @@
 import typing
-from typing import Any, Dict, Iterable, Optional
+import urllib.parse
+from typing import Any, Dict, Iterable, Optional, Tuple
 
 from pydantic.fields import Field
 from sqlalchemy import create_engine, inspect
+from sqlalchemy.engine import URL
 from sqlalchemy.engine.reflection import Inspector
 
 from datahub.configuration.common import AllowDenyPattern
@@ -12,12 +14,12 @@ from datahub.ingestion.api.workunit import MetadataWorkUnit
 from datahub.ingestion.source.sql.sql_common import SQLAlchemySource, logger
 from datahub.ingestion.source.sql.sql_config import (
     BasicSQLAlchemyConfig,
-    make_sqlalchemy_uri,
 )
 from datahub.ingestion.source.sql.sql_utils import (
     add_table_to_schema_container,
     gen_database_key,
 )
+from datahub.ingestion.source.sql.sqlalchemy_uri import make_sqlalchemy_uri
 
 
 class TwoTierSQLAlchemyConfig(BasicSQLAlchemyConfig):
@@ -29,6 +31,7 @@ class TwoTierSQLAlchemyConfig(BasicSQLAlchemyConfig):
         # The superclass contains a `schema_pattern` field, so we need this here
         # to override the documentation.
         default=AllowDenyPattern.allow_all(),
+        hidden_from_docs=True,
         description="Deprecated in favour of database_pattern.",
     )
 
@@ -41,20 +44,37 @@ class TwoTierSQLAlchemyConfig(BasicSQLAlchemyConfig):
         uri_opts: typing.Optional[typing.Dict[str, typing.Any]] = None,
         current_db: typing.Optional[str] = None,
     ) -> str:
-        return self.sqlalchemy_uri or make_sqlalchemy_uri(
-            self.scheme,
-            self.username,
-            self.password.get_secret_value() if self.password else None,
-            self.host_port,
-            current_db if current_db else self.database,
-            uri_opts=uri_opts,
-        )
+        if self.sqlalchemy_uri:
+            parsed_url = urllib.parse.urlsplit(self.sqlalchemy_uri)
+            url = URL.create(
+                drivername=parsed_url.scheme,
+                username=parsed_url.username,
+                password=parsed_url.password,
+                host=parsed_url.hostname,
+                port=parsed_url.port,
+                database=current_db or parsed_url.path.lstrip("/"),
+                query=urllib.parse.parse_qs(parsed_url.query),
+            ).update_query_dict(uri_opts or {})
+            return str(url)
+        else:
+            return make_sqlalchemy_uri(
+                self.scheme,
+                self.username,
+                self.password.get_secret_value() if self.password else None,
+                self.host_port,
+                current_db or self.database,
+                uri_opts=uri_opts,
+            )
 
 
 class TwoTierSQLAlchemySource(SQLAlchemySource):
     def __init__(self, config, ctx, platform):
         super().__init__(config, ctx, platform)
         self.config: TwoTierSQLAlchemyConfig = config
+
+    def get_db_schema(self, dataset_identifier: str) -> Tuple[Optional[str], str]:
+        schema, _view = dataset_identifier.split(".", 1)
+        return None, schema
 
     def get_database_container_key(self, db_name: str, schema: str) -> ContainerKey:
         # Because our overridden get_allowed_schemas method returns db_name as the schema name,

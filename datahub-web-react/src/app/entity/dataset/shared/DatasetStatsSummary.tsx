@@ -1,17 +1,20 @@
+import { ClockCircleOutlined, ConsoleSqlOutlined, HddOutlined, TableOutlined, TeamOutlined } from '@ant-design/icons';
+import { Popover } from 'antd';
 import React from 'react';
 import styled from 'styled-components/macro';
-import { Popover } from 'antd';
-import { ClockCircleOutlined, ConsoleSqlOutlined, TableOutlined, TeamOutlined, HddOutlined } from '@ant-design/icons';
-import { formatNumberWithoutAbbreviation } from '../../../shared/formatNumber';
-import { ANTD_GRAY } from '../../shared/constants';
-import { toLocalDateTimeString, toRelativeTimeString } from '../../../shared/time/timeUtils';
-import { StatsSummary } from '../../shared/components/styled/StatsSummary';
-import { FormattedBytesStat } from './FormattedBytesStat';
-import { countFormatter, needsFormatting } from '../../../../utils/formatter';
-import ExpandingStat from './ExpandingStat';
+
+import ExpandingStat from '@app/entity/dataset/shared/ExpandingStat';
+import { FormattedBytesStat } from '@app/entity/dataset/shared/FormattedBytesStat';
+import { StatsSummary } from '@app/entity/shared/components/styled/StatsSummary';
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+import { formatNumberWithoutAbbreviation } from '@app/shared/formatNumber';
+import { toLocalDateTimeString, toRelativeTimeString } from '@app/shared/time/timeUtils';
+import { countFormatter, needsFormatting } from '@utils/formatter';
 
 const StatText = styled.span<{ color: string }>`
     color: ${(props) => props.color};
+    @media (min-width: 1160px) {
+        white-space: nowrap;
 `;
 
 const PopoverContent = styled.div`
@@ -28,6 +31,7 @@ type Props = {
     lastUpdatedMs?: number | null;
     color?: string;
     mode?: 'normal' | 'tooltip-content';
+    shouldWrap?: boolean;
 };
 
 export const DatasetStatsSummary = ({
@@ -40,9 +44,10 @@ export const DatasetStatsSummary = ({
     lastUpdatedMs,
     color,
     mode = 'normal',
+    shouldWrap,
 }: Props) => {
     const isTooltipMode = mode === 'tooltip-content';
-    const displayedColor = isTooltipMode ? '' : color ?? ANTD_GRAY[7];
+    const displayedColor = isTooltipMode ? '' : (color ?? ANTD_GRAY[7]);
 
     const statsViews = [
         !!rowCount && (
@@ -103,5 +108,5 @@ export const DatasetStatsSummary = ({
         ),
     ].filter((stat) => stat);
 
-    return <>{statsViews.length > 0 && <StatsSummary stats={statsViews} />}</>;
+    return <>{statsViews.length > 0 && <StatsSummary stats={statsViews} shouldWrap={shouldWrap} />}</>;
 };

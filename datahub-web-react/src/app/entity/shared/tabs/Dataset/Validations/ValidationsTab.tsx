@@ -1,14 +1,16 @@
-import React, { useEffect } from 'react';
+import { AuditOutlined, FileProtectOutlined } from '@ant-design/icons';
 import { Button } from 'antd';
+import React, { useEffect } from 'react';
 import { useHistory, useLocation } from 'react-router';
 import styled from 'styled-components';
-import { FileDoneOutlined, FileProtectOutlined } from '@ant-design/icons';
-import { useEntityData } from '../../../EntityContext';
-import { TestResults } from './TestResults';
-import { Assertions } from './Assertions';
-import TabToolbar from '../../../components/styled/TabToolbar';
-import { useGetValidationsTab } from './useGetValidationsTab';
-import { ANTD_GRAY } from '../../../constants';
+
+import { useEntityData } from '@app/entity/shared/EntityContext';
+import TabToolbar from '@app/entity/shared/components/styled/TabToolbar';
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+import { Assertions } from '@app/entity/shared/tabs/Dataset/Validations/Assertions';
+import { DataContractTab } from '@app/entity/shared/tabs/Dataset/Validations/contract/DataContractTab';
+import { useGetValidationsTab } from '@app/entity/shared/tabs/Dataset/Validations/useGetValidationsTab';
+import { useAppConfig } from '@app/useAppConfig';
 
 const TabTitle = styled.span`
     margin-left: 4px;
@@ -20,8 +22,8 @@ const TabButton = styled(Button)<{ selected: boolean }>`
 `;
 
 enum TabPaths {
-    ASSERTIONS = 'Assertions',
-    TESTS = 'Tests',
+    ASSERTIONS = 'List',
+    DATA_CONTRACT = 'Data Contract',
 }
 
 const DEFAULT_TAB = TabPaths.ASSERTIONS;
@@ -33,11 +35,9 @@ export const ValidationsTab = () => {
     const { entityData } = useEntityData();
     const history = useHistory();
     const { pathname } = useLocation();
+    const appConfig = useAppConfig();
 
     const totalAssertions = (entityData as any)?.assertions?.total;
-    const passingTests = (entityData as any)?.testResults?.passing || [];
-    const maybeFailingTests = (entityData as any)?.testResults?.failing || [];
-    const totalTests = maybeFailingTests.length + passingTests.length;
 
     const { selectedTab, basePath } = useGetValidationsTab(pathname, Object.values(TabPaths));
 
@@ -64,18 +64,23 @@ export const ValidationsTab = () => {
             disabled: totalAssertions === 0,
             content: <Assertions />,
         },
-        {
+    ];
+
+    if (appConfig.config.featureFlags?.dataContractsEnabled) {
+        // If contracts feature is enabled, add to list.
+        tabs.push({
             title: (
                 <>
-                    <FileDoneOutlined />
-                    <TabTitle>Tests ({totalTests})</TabTitle>
+                    <AuditOutlined />
+
+                    <TabTitle>Data Contract</TabTitle>
                 </>
             ),
-            path: TabPaths.TESTS,
-            disabled: totalTests === 0,
-            content: <TestResults passing={passingTests} failing={maybeFailingTests} />,
-        },
-    ];
+            path: TabPaths.DATA_CONTRACT,
+            content: <DataContractTab />,
+            disabled: false,
+        });
+    }
 
     return (
         <>

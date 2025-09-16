@@ -1,13 +1,14 @@
 import { MockedProvider } from '@apollo/client/testing';
 import { render } from '@testing-library/react';
 import React from 'react';
-import { mocks } from '../../../../../Mocks';
-import TestPageContainer from '../../../../../utils/test-utils/TestPageContainer';
-import GlossaryTermHeader from '../GlossaryTermHeader';
+
+import GlossaryTermHeader from '@app/entity/glossaryTerm/profile/GlossaryTermHeader';
+import { mocks } from '@src/Mocks';
+import TestPageContainer from '@utils/test-utils/TestPageContainer';
 
 const glossaryTermHeaderData = {
     definition: 'this is sample definition',
-    termSource: 'termSource',
+    sourceUrl: 'sourceUrl',
     sourceRef: 'Source ref',
     fqdn: 'fqdn',
 };
@@ -19,9 +20,9 @@ describe('Glossary Term Header', () => {
                 <TestPageContainer>
                     <GlossaryTermHeader
                         definition={glossaryTermHeaderData.definition}
-                        termSource={glossaryTermHeaderData.termSource}
+                        sourceUrl={glossaryTermHeaderData.sourceUrl}
                         sourceRef={glossaryTermHeaderData.sourceRef}
-                        fqdn={glossaryTermHeaderData.fqdn}
+                        ownership={undefined}
                     />
                 </TestPageContainer>
             </MockedProvider>,

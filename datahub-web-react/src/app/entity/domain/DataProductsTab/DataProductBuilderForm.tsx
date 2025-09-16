@@ -1,20 +1,17 @@
 import { Form, Input, Typography } from 'antd';
 import React from 'react';
 import styled from 'styled-components';
-import { Editor as MarkdownEditor } from '../../shared/tabs/Documentation/components/editor/Editor';
-import { ANTD_GRAY } from '../../shared/constants';
-import { DataProductBuilderState } from './types';
+
+import { DataProductAdvancedOption } from '@app/entity/domain/DataProductsTab/DataProductAdvancedOption';
+import { DataProductBuilderFormProps } from '@app/entity/domain/DataProductsTab/types';
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+import { Editor as MarkdownEditor } from '@app/entity/shared/tabs/Documentation/components/editor/Editor';
 
 const StyledEditor = styled(MarkdownEditor)`
     border: 1px solid ${ANTD_GRAY[4]};
 `;
 
-type Props = {
-    builderState: DataProductBuilderState;
-    updateBuilderState: (newState: DataProductBuilderState) => void;
-};
-
-export default function DataProductBuilderForm({ builderState, updateBuilderState }: Props) {
+export default function DataProductBuilderForm({ builderState, updateBuilderState }: DataProductBuilderFormProps) {
     function updateName(name: string) {
         updateBuilderState({
             ...builderState,
@@ -47,6 +44,7 @@ export default function DataProductBuilderForm({ builderState, updateBuilderStat
             <Form.Item label={<Typography.Text strong>Description</Typography.Text>}>
                 <StyledEditor doNotFocus content={builderState.description} onChange={updateDescription} />
             </Form.Item>
+            <DataProductAdvancedOption builderState={builderState} updateBuilderState={updateBuilderState} />
         </Form>
     );
 }

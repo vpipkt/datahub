@@ -1,26 +1,30 @@
-import * as React from 'react';
 import { ConsoleSqlOutlined } from '@ant-design/icons';
-import { DataJob, EntityType, OwnershipType, SearchResult } from '../../../types.generated';
-import { Preview } from './preview/Preview';
-import { Entity, EntityCapabilityType, IconStyleType, PreviewType } from '../Entity';
-import { EntityProfile } from '../shared/containers/profile/EntityProfile';
-import { GetDataJobQuery, useGetDataJobQuery, useUpdateDataJobMutation } from '../../../graphql/dataJob.generated';
-import { DocumentationTab } from '../shared/tabs/Documentation/DocumentationTab';
-import { PropertiesTab } from '../shared/tabs/Properties/PropertiesTab';
-import { LineageTab } from '../shared/tabs/Lineage/LineageTab';
-import { SidebarAboutSection } from '../shared/containers/profile/sidebar/AboutSection/SidebarAboutSection';
-import { SidebarTagsSection } from '../shared/containers/profile/sidebar/SidebarTagsSection';
-import { SidebarOwnerSection } from '../shared/containers/profile/sidebar/Ownership/sidebar/SidebarOwnerSection';
-import { GenericEntityProperties } from '../shared/types';
-import { DataJobFlowTab } from '../shared/tabs/Entity/DataJobFlowTab';
-import { getDataForEntityType } from '../shared/containers/profile/utils';
-import { SidebarDomainSection } from '../shared/containers/profile/sidebar/Domain/SidebarDomainSection';
-import { RunsTab } from './tabs/RunsTab';
-import { EntityMenuItems } from '../shared/EntityDropdown/EntityDropdown';
-import { DataFlowEntity } from '../dataFlow/DataFlowEntity';
-import { capitalizeFirstLetterOnly } from '../../shared/textUtil';
-import DataProductSection from '../shared/containers/profile/sidebar/DataProduct/DataProductSection';
-import { getDataProduct } from '../shared/utils';
+import * as React from 'react';
+
+import { Entity, EntityCapabilityType, IconStyleType, PreviewType } from '@app/entity/Entity';
+import { DataFlowEntity } from '@app/entity/dataFlow/DataFlowEntity';
+import { Preview } from '@app/entity/dataJob/preview/Preview';
+import { RunsTab } from '@app/entity/dataJob/tabs/RunsTab';
+import { EntityMenuItems } from '@app/entity/shared/EntityDropdown/EntityDropdown';
+import { EntityProfile } from '@app/entity/shared/containers/profile/EntityProfile';
+import { SidebarAboutSection } from '@app/entity/shared/containers/profile/sidebar/AboutSection/SidebarAboutSection';
+import DataProductSection from '@app/entity/shared/containers/profile/sidebar/DataProduct/DataProductSection';
+import { SidebarDomainSection } from '@app/entity/shared/containers/profile/sidebar/Domain/SidebarDomainSection';
+import { SidebarOwnerSection } from '@app/entity/shared/containers/profile/sidebar/Ownership/sidebar/SidebarOwnerSection';
+import { SidebarTagsSection } from '@app/entity/shared/containers/profile/sidebar/SidebarTagsSection';
+import SidebarStructuredPropsSection from '@app/entity/shared/containers/profile/sidebar/StructuredProperties/SidebarStructuredPropsSection';
+import { getDataForEntityType } from '@app/entity/shared/containers/profile/utils';
+import { DocumentationTab } from '@app/entity/shared/tabs/Documentation/DocumentationTab';
+import { DataJobFlowTab } from '@app/entity/shared/tabs/Entity/DataJobFlowTab';
+import { IncidentTab } from '@app/entity/shared/tabs/Incident/IncidentTab';
+import { LineageTab } from '@app/entity/shared/tabs/Lineage/LineageTab';
+import { PropertiesTab } from '@app/entity/shared/tabs/Properties/PropertiesTab';
+import { GenericEntityProperties } from '@app/entity/shared/types';
+import { getDataProduct } from '@app/entity/shared/utils';
+import { capitalizeFirstLetterOnly } from '@app/shared/textUtil';
+
+import { GetDataJobQuery, useGetDataJobQuery, useUpdateDataJobMutation } from '@graphql/dataJob.generated';
+import { DataJob, EntityType, OwnershipType, SearchResult } from '@types';
 
 const getDataJobPlatformName = (data?: DataJob): string => {
     return (
@@ -63,20 +67,24 @@ export class DataJobEntity implements Entity<DataJob> {
 
     getAutoCompleteFieldName = () => 'name';
 
+    getGraphName = () => 'dataJob';
+
     getPathName = () => 'tasks';
 
     getEntityName = () => 'Task';
 
     getCollectionName = () => 'Tasks';
 
+    useEntityQuery = useGetDataJobQuery;
+
     renderProfile = (urn: string) => (
         <EntityProfile
             urn={urn}
             entityType={EntityType.DataJob}
-            useEntityQuery={useGetDataJobQuery}
+            useEntityQuery={this.useEntityQuery}
             useUpdateQuery={useUpdateDataJobMutation}
             getOverrideProperties={this.getOverridePropertiesFromEntity}
-            headerDropdownItems={new Set([EntityMenuItems.UPDATE_DEPRECATION])}
+            headerDropdownItems={new Set([EntityMenuItems.UPDATE_DEPRECATION, EntityMenuItems.RAISE_INCIDENT])}
             tabs={[
                 {
                     name: 'Documentation',
@@ -102,33 +110,46 @@ export class DataJobEntity implements Entity<DataJob> {
                         enabled: (_, dataJob: GetDataJobQuery) => (dataJob?.dataJob?.runs?.total || 0) !== 0,
                     },
                 },
-            ]}
-            sidebarSections={[
                 {
-                    component: SidebarAboutSection,
-                },
-                {
-                    component: SidebarOwnerSection,
-                    properties: {
-                        defaultOwnerType: OwnershipType.TechnicalOwner,
+                    name: 'Incidents',
+                    component: IncidentTab,
+                    getDynamicName: (_, dataJob) => {
+                        const activeIncidentCount = dataJob?.dataJob?.activeIncidents?.total;
+                        return `Incidents${(activeIncidentCount && ` (${activeIncidentCount})`) || ''}`;
                     },
                 },
-                {
-                    component: SidebarTagsSection,
-                    properties: {
-                        hasTags: true,
-                        hasTerms: true,
-                    },
-                },
-                {
-                    component: SidebarDomainSection,
-                },
-                {
-                    component: DataProductSection,
-                },
             ]}
+            sidebarSections={this.getSidebarSections()}
         />
     );
+
+    getSidebarSections = () => [
+        {
+            component: SidebarAboutSection,
+        },
+        {
+            component: SidebarOwnerSection,
+            properties: {
+                defaultOwnerType: OwnershipType.TechnicalOwner,
+            },
+        },
+        {
+            component: SidebarTagsSection,
+            properties: {
+                hasTags: true,
+                hasTerms: true,
+            },
+        },
+        {
+            component: SidebarDomainSection,
+        },
+        {
+            component: DataProductSection,
+        },
+        {
+            component: SidebarStructuredPropsSection,
+        },
+    ];
 
     getOverridePropertiesFromEntity = (dataJob?: DataJob | null): GenericEntityProperties => {
         // TODO: Get rid of this once we have correctly formed platform coming back.
@@ -147,6 +168,7 @@ export class DataJobEntity implements Entity<DataJob> {
             <Preview
                 urn={data.urn}
                 name={data.properties?.name || ''}
+                subType={data.subTypes?.typeNames?.[0]}
                 description={data.editableProperties?.description || data.properties?.description}
                 platformName={getDataJobPlatformName(data)}
                 platformLogo={data?.dataFlow?.platform?.properties?.logoUrl || ''}
@@ -155,6 +177,7 @@ export class DataJobEntity implements Entity<DataJob> {
                 domain={data.domain?.domain}
                 dataProduct={getDataProduct(genericProperties?.dataProduct)}
                 externalUrl={data.properties?.externalUrl}
+                health={data.health}
             />
         );
     };
@@ -166,6 +189,7 @@ export class DataJobEntity implements Entity<DataJob> {
             <Preview
                 urn={data.urn}
                 name={data.properties?.name || ''}
+                subType={data.subTypes?.typeNames?.[0]}
                 description={data.editableProperties?.description || data.properties?.description}
                 platformName={getDataJobPlatformName(data)}
                 platformLogo={data?.dataFlow?.platform?.properties?.logoUrl || ''}
@@ -182,6 +206,8 @@ export class DataJobEntity implements Entity<DataJob> {
                 }
                 degree={(result as any).degree}
                 paths={(result as any).paths}
+                health={data.health}
+                parentContainers={data.parentContainers}
             />
         );
     };
@@ -212,6 +238,7 @@ export class DataJobEntity implements Entity<DataJob> {
             type: EntityType.DataJob,
             icon: entity?.dataFlow?.platform?.properties?.logoUrl || undefined,
             platform: entity?.dataFlow?.platform,
+            health: entity?.health || undefined,
         };
     };
 

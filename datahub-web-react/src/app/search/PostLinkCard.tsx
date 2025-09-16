@@ -1,9 +1,11 @@
-import React from 'react';
-import { Button, Image, Typography } from 'antd';
 import { ArrowRightOutlined } from '@ant-design/icons';
+import { Button, Image, Typography } from 'antd';
+import React from 'react';
 import styled from 'styled-components/macro';
-import { ANTD_GRAY } from '../entity/shared/constants';
-import { Post } from '../../types.generated';
+
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+
+import { Post } from '@types';
 
 const CardContainer = styled(Button)`
     display: flex;
@@ -28,7 +30,11 @@ const LogoContainer = styled.div`
     align-items: center;
 `;
 
-const PlatformLogo = styled(Image)`
+const EmptyContainer = styled.div`
+    padding-left: 25px;
+`;
+
+const PlatformLogo = styled(Image)`S
     width: auto;
     object-fit: contain;
     background-color: transparent;
@@ -39,12 +45,17 @@ const TextContainer = styled.div`
     flex: 2;
 `;
 
-const TextWrapper = styled.div`
-    text-align: left;
+const FlexWrapper = styled.div<{ alignCenter?: boolean }>`
     display: flex;
     flex-direction: column;
     justify-content: center;
     flex: 2;
+    ${(props) => props.alignCenter && 'align-items: center;'}
+`;
+
+const TextWrapper = styled.div`
+    display: flex;
+    flex-direction: column;
 `;
 
 const HeaderText = styled(Typography.Text)`
@@ -74,19 +85,23 @@ export const PostLinkCard = ({ linkPost }: Props) => {
     const link = linkPost?.content?.link || '';
 
     return (
-        <CardContainer type="link" href={link}>
-            {hasMedia && (
+        <CardContainer type="link" href={link} target="_blank" rel="noopener noreferrer">
+            {hasMedia ? (
                 <LogoContainer>
                     <PlatformLogo width={50} height={50} preview={false} src={linkPost?.content?.media?.location} />
                 </LogoContainer>
+            ) : (
+                <EmptyContainer />
             )}
             <TextContainer>
-                <TextWrapper style={{ textAlign: 'left' }}>
-                    <HeaderText type="secondary">Link</HeaderText>
-                    <Title style={{ margin: 0 }} ellipsis={{ rows: 2 }} level={5}>
-                        {linkPost?.content?.title}
-                    </Title>
-                </TextWrapper>
+                <FlexWrapper>
+                    <TextWrapper>
+                        <HeaderText type="secondary">Link</HeaderText>
+                        <Title style={{ margin: 0 }} ellipsis={{ rows: 2 }} level={5}>
+                            {linkPost?.content?.title}
+                        </Title>
+                    </TextWrapper>
+                </FlexWrapper>
                 <StyledArrowOutlined />
             </TextContainer>
         </CardContainer>

@@ -1,7 +1,10 @@
 import { Typography } from 'antd';
-import React from 'react';
+import React, { useState } from 'react';
 import styled from 'styled-components';
-import { DomainsList } from './DomainsList';
+
+import { DomainsContext } from '@app/domain/DomainsContext';
+import { DomainsList } from '@app/domain/DomainsList';
+import { GenericEntityProperties } from '@app/entity/shared/types';
 
 const PageContainer = styled.div`
     padding-top: 20px;
@@ -22,17 +25,22 @@ const PageTitle = styled(Typography.Title)`
 const ListContainer = styled.div``;
 
 export const ManageDomainsPage = () => {
+    const [entityData, setEntityData] = useState<GenericEntityProperties | null>(null);
+    const [parentDomainsToUpdate, setParentDomainsToUpdate] = useState<string[]>([]);
+
     return (
-        <PageContainer>
-            <PageHeaderContainer>
-                <PageTitle level={3}>Domains</PageTitle>
-                <Typography.Paragraph type="secondary">
-                    View your DataHub Domains. Take administrative actions.
-                </Typography.Paragraph>
-            </PageHeaderContainer>
-            <ListContainer>
-                <DomainsList />
-            </ListContainer>
-        </PageContainer>
+        <DomainsContext.Provider value={{ entityData, setEntityData, parentDomainsToUpdate, setParentDomainsToUpdate }}>
+            <PageContainer>
+                <PageHeaderContainer>
+                    <PageTitle level={3}>Domains</PageTitle>
+                    <Typography.Paragraph type="secondary">
+                        View your DataHub Domains. Take administrative actions.
+                    </Typography.Paragraph>
+                </PageHeaderContainer>
+                <ListContainer>
+                    <DomainsList />
+                </ListContainer>
+            </PageContainer>
+        </DomainsContext.Provider>
     );
 };

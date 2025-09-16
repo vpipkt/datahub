@@ -1,20 +1,16 @@
-import React from 'react';
-import { render } from '@testing-library/react';
-import { Zoom } from '@vx/zoom';
 import { MockedProvider } from '@apollo/client/testing';
-import {
-    dataset3WithLineage,
-    dataset4WithLineage,
-    dataset5WithLineage,
-    dataset6WithLineage,
-    mocks,
-} from '../../../Mocks';
-import { Direction, FetchedEntities } from '../types';
-import constructTree from '../utils/constructTree';
-import LineageTree from '../LineageTree';
-import extendAsyncEntities from '../utils/extendAsyncEntities';
-import TestPageContainer, { getTestEntityRegistry } from '../../../utils/test-utils/TestPageContainer';
-import { EntityType } from '../../../types.generated';
+import { render } from '@testing-library/react';
+import { Zoom } from '@visx/zoom';
+import React from 'react';
+
+import LineageTree from '@app/lineage/LineageTree';
+import { Direction, EntityAndType } from '@app/lineage/types';
+import constructTree from '@app/lineage/utils/constructTree';
+import extendAsyncEntities from '@app/lineage/utils/extendAsyncEntities';
+import { dataset3WithLineage, dataset4WithLineage, dataset5WithLineage, dataset6WithLineage, mocks } from '@src/Mocks';
+import TestPageContainer, { getTestEntityRegistry } from '@utils/test-utils/TestPageContainer';
+
+import { EntityType } from '@types';
 
 const margin = { top: 10, left: 280, right: 280, bottom: 10 };
 const [windowWidth, windowHeight] = [1000, 500];
@@ -47,10 +43,10 @@ describe('LineageTree', () => {
                     {},
                     acc,
                     testEntityRegistry,
-                    { entity: entry.entity, type: EntityType.Dataset },
+                    { entity: entry.entity, type: EntityType.Dataset } as EntityAndType,
                     entry.fullyFetched,
                 ),
-            {} as FetchedEntities,
+            new Map(),
         );
 
         const downstreamData = constructTree(
@@ -78,7 +74,7 @@ describe('LineageTree', () => {
                         scaleXMax={2}
                         scaleYMin={1 / 8}
                         scaleYMax={2}
-                        transformMatrix={initialTransform}
+                        initialTransformMatrix={initialTransform}
                     >
                         {(zoom) => (
                             <svg>
@@ -86,17 +82,17 @@ describe('LineageTree', () => {
                                     upstreamData={upstreamData}
                                     downstreamData={downstreamData}
                                     zoom={zoom}
-                                    onEntityClick={jest.fn()}
-                                    onLineageExpand={jest.fn()}
+                                    onEntityClick={vi.fn()}
+                                    onLineageExpand={vi.fn()}
                                     canvasHeight={yMax}
                                     margin={margin}
-                                    direction={Direction.Upstream}
-                                    setIsDraggingNode={jest.fn()}
+                                    setIsDraggingNode={vi.fn()}
                                     draggedNodes={{}}
-                                    setDraggedNodes={jest.fn()}
-                                    onEntityCenter={jest.fn()}
-                                    setHoveredEntity={jest.fn()}
+                                    setDraggedNodes={vi.fn()}
+                                    onEntityCenter={vi.fn()}
+                                    setHoveredEntity={vi.fn()}
                                     fetchedEntities={mockFetchedEntities}
+                                    setUpdatedLineages={vi.fn()}
                                 />
                             </svg>
                         )}

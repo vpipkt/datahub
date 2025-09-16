@@ -1,41 +1,29 @@
-import datetime
+from typing import List
+
 from datahub.emitter.mce_builder import (
+    make_data_flow_urn,
+    make_data_job_urn_with_flow,
     make_data_platform_urn,
     make_dataset_urn,
-    make_data_job_urn_with_flow,
-    make_data_flow_urn,
 )
 from datahub.emitter.mcp import MetadataChangeProposalWrapper
-from datahub.emitter.rest_emitter import DatahubRestEmitter
+from datahub.ingestion.graph.client import DataHubGraph
 from datahub.metadata.com.linkedin.pegasus2avro.dataset import UpstreamLineage
+from datahub.metadata.com.linkedin.pegasus2avro.mxe import SystemMetadata
 from datahub.metadata.schema_classes import (
     AuditStampClass,
-    ChangeTypeClass,
+    DataFlowInfoClass,
+    DataJobInfoClass,
+    DataJobInputOutputClass,
     DatasetLineageTypeClass,
     DatasetPropertiesClass,
-    DataFlowInfoClass,
-    DataJobInputOutputClass,
-    DataJobInfoClass,
     EdgeClass,
     MySqlDDLClass,
     SchemaFieldClass,
     SchemaMetadataClass,
     UpstreamClass,
 )
-from typing import List
-
-from tests.setup.lineage.constants import (
-    DATASET_ENTITY_TYPE,
-    DATA_JOB_ENTITY_TYPE,
-    DATA_FLOW_ENTITY_TYPE,
-    DATA_FLOW_INFO_ASPECT_NAME,
-    DATA_JOB_INFO_ASPECT_NAME,
-    DATA_JOB_INPUT_OUTPUT_ASPECT_NAME,
-)
-from tests.setup.lineage.helper_classes import (
-    Dataset,
-    Pipeline,
-)
+from tests.setup.lineage.helper_classes import Dataset, Pipeline
 
 
 def create_node(dataset: Dataset) -> List[MetadataChangeProposalWrapper]:
@@ -50,10 +38,7 @@ def create_node(dataset: Dataset) -> List[MetadataChangeProposalWrapper]:
     )
     mcps.append(
         MetadataChangeProposalWrapper(
-            entityType=DATASET_ENTITY_TYPE,
             entityUrn=dataset_urn,
-            changeType=ChangeTypeClass.UPSERT,
-            aspectName="datasetProperties",
             aspect=dataset_properties,
         )
     )
@@ -74,10 +59,7 @@ def create_node(dataset: Dataset) -> List[MetadataChangeProposalWrapper]:
 
     mcps.append(
         MetadataChangeProposalWrapper(
-            entityType=DATASET_ENTITY_TYPE,
             entityUrn=dataset_urn,
-            changeType=ChangeTypeClass.UPSERT,
-            aspectName="schemaMetadata",
             aspect=dataset_schema,
         )
     )
@@ -85,10 +67,10 @@ def create_node(dataset: Dataset) -> List[MetadataChangeProposalWrapper]:
 
 
 def create_edge(
-        source_urn: str,
-        destination_urn: str,
-        created_timestamp_millis: int,
-        updated_timestamp_millis: int,
+    source_urn: str,
+    destination_urn: str,
+    created_timestamp_millis: int,
+    updated_timestamp_millis: int,
 ) -> EdgeClass:
     created_audit_stamp: AuditStampClass = AuditStampClass(
         time=created_timestamp_millis, actor="urn:li:corpuser:unknown"
@@ -105,7 +87,7 @@ def create_edge(
 
 
 def create_nodes_and_edges(
-        airflow_dag: Pipeline,
+    airflow_dag: Pipeline,
 ) -> List[MetadataChangeProposalWrapper]:
     mcps = []
     data_flow_urn = make_data_flow_urn(
@@ -114,10 +96,7 @@ def create_nodes_and_edges(
     data_flow_info = DataFlowInfoClass(name=airflow_dag.name)
     mcps.append(
         MetadataChangeProposalWrapper(
-            entityType=DATA_FLOW_ENTITY_TYPE,
-            changeType=ChangeTypeClass.UPSERT,
             entityUrn=data_flow_urn,
-            aspectName=DATA_FLOW_INFO_ASPECT_NAME,
             aspect=data_flow_info,
         )
     )
@@ -133,10 +112,7 @@ def create_nodes_and_edges(
         )
         mcps.append(
             MetadataChangeProposalWrapper(
-                entityType=DATA_JOB_ENTITY_TYPE,
-                changeType=ChangeTypeClass.UPSERT,
                 entityUrn=data_job_urn,
-                aspectName=DATA_JOB_INFO_ASPECT_NAME,
                 aspect=data_job_info,
             )
         )
@@ -148,10 +124,7 @@ def create_nodes_and_edges(
         )
         mcps.append(
             MetadataChangeProposalWrapper(
-                entityType=DATA_JOB_ENTITY_TYPE,
-                changeType=ChangeTypeClass.UPSERT,
                 entityUrn=data_job_urn,
-                aspectName=DATA_JOB_INPUT_OUTPUT_ASPECT_NAME,
                 aspect=data_job_io,
             )
         )
@@ -160,9 +133,9 @@ def create_nodes_and_edges(
 
 
 def create_upstream_edge(
-        upstream_entity_urn: str,
-        created_timestamp_millis: int,
-        updated_timestamp_millis: int,
+    upstream_entity_urn: str,
+    created_timestamp_millis: int,
+    updated_timestamp_millis: int,
 ):
     created_audit_stamp: AuditStampClass = AuditStampClass(
         time=created_timestamp_millis, actor="urn:li:corpuser:unknown"
@@ -180,30 +153,26 @@ def create_upstream_edge(
 
 
 def create_upstream_mcp(
-        entity_type: str,
-        entity_urn: str,
-        upstreams: List[UpstreamClass],
-        timestamp_millis: int,
-        run_id: str = "",
+    entity_type: str,
+    entity_urn: str,
+    upstreams: List[UpstreamClass],
+    timestamp_millis: int,
+    run_id: str = "",
 ) -> MetadataChangeProposalWrapper:
     print(f"Creating upstreamLineage aspect for {entity_urn}")
-    timestamp_millis: int = int(datetime.datetime.now().timestamp() * 1000)
     mcp = MetadataChangeProposalWrapper(
-        entityType=entity_type,
         entityUrn=entity_urn,
-        changeType=ChangeTypeClass.UPSERT,
-        aspectName="upstreamLineage",
         aspect=UpstreamLineage(upstreams=upstreams),
-        systemMetadata={
-            "lastObserved": timestamp_millis,
-            "runId": run_id,
-        },
+        systemMetadata=SystemMetadata(
+            lastObserved=timestamp_millis,
+            runId=run_id,
+        ),
     )
     return mcp
 
 
 def emit_mcps(
-        emitter: DatahubRestEmitter, mcps: List[MetadataChangeProposalWrapper]
+    graph_client: DataHubGraph, mcps: List[MetadataChangeProposalWrapper]
 ) -> None:
     for mcp in mcps:
-        emitter.emit_mcp(mcp)
+        graph_client.emit_mcp(mcp)

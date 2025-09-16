@@ -4,6 +4,7 @@ fragment lineageNodeProperties on EntityWithRelationships {
     ... on DataJob {
         urn
         type
+        exists
         dataFlow {
             ...nonRecursiveDataFlowFields
         }
@@ -36,6 +37,9 @@ fragment lineageNodeProperties on EntityWithRelationships {
         dataPlatformInstance {
             ...dataPlatformInstanceFields
         }
+        subTypes {
+            typeNames
+        }
         editableProperties {
             description
         }
@@ -52,10 +56,49 @@ fragment lineageNodeProperties on EntityWithRelationships {
                     urn
                     path
                 }
+                query
+                transformOperation
+            }
+        }
+        health {
+            ...entityHealth
+        }
+        structuredProperties {
+            properties {
+                ...structuredPropertiesFields
+            }
+        }
+        browsePathV2 {
+            ...browsePathV2Fields
+        }
+        lastRun: runs(start: 0, count: 1) {
+            count
+            start
+            total
+            runs {
+                urn
+                type
+                properties {
+                    created {
+                        time
+                        actor
+                    }
+                }
+                state(startTimeMillis: null, endTimeMillis: null, limit: 1) {
+                    status
+                    attempt
+                    result {
+                        resultType
+                        nativeResultType
+                    }
+                    timestampMillis
+                    durationMillis
+                }
             }
         }
     }
     ... on DataFlow {
+        exists
         orchestrator
         flowId
         cluster
@@ -86,8 +129,23 @@ fragment lineageNodeProperties on EntityWithRelationships {
         status {
             removed
         }
+        deprecation {
+            ...deprecationFields
+        }
+        health {
+            ...entityHealth
+        }
+        structuredProperties {
+            properties {
+                ...structuredPropertiesFields
+            }
+        }
+        browsePathV2 {
+            ...browsePathV2Fields
+        }
     }
     ... on Dashboard {
+        exists
         urn
         type
         tool
@@ -123,6 +181,9 @@ fragment lineageNodeProperties on EntityWithRelationships {
         parentContainers {
             ...parentContainersFields
         }
+        browsePathV2 {
+            ...browsePathV2Fields
+        }
         status {
             removed
         }
@@ -141,8 +202,17 @@ fragment lineageNodeProperties on EntityWithRelationships {
         subTypes {
             typeNames
         }
+        health {
+            ...entityHealth
+        }
+        structuredProperties {
+            properties {
+                ...structuredPropertiesFields
+            }
+        }
     }
     ... on Chart {
+        exists
         tool
         chartId
         properties {
@@ -161,12 +231,33 @@ fragment lineageNodeProperties on EntityWithRelationships {
         domain {
             ...entityDomain
         }
+        parentContainers {
+            ...parentContainersFields
+        }
+        browsePathV2 {
+            ...browsePathV2Fields
+        }
         ...entityDataProduct
         status {
             removed
         }
+        subTypes {
+            typeNames
+        }
+        deprecation {
+            ...deprecationFields
+        }
+        health {
+            ...entityHealth
+        }
+        structuredProperties {
+            properties {
+                ...structuredPropertiesFields
+            }
+        }
     }
     ... on Dataset {
+        exists
         name
         properties {
             name
@@ -181,6 +272,12 @@ fragment lineageNodeProperties on EntityWithRelationships {
         }
         ownership {
             ...ownershipFields
+        }
+        parentContainers {
+            ...parentContainersFields
+        }
+        browsePathV2 {
+            ...browsePathV2Fields
         }
         subTypes {
             typeNames
@@ -197,14 +294,28 @@ fragment lineageNodeProperties on EntityWithRelationships {
                 urn
                 path
             }
+            query
+            transformOperation
+        }
+        health {
+            ...entityHealth
+        }
+        structuredProperties {
+            properties {
+                ...structuredPropertiesFields
+            }
         }
     }
     ... on MLModelGroup {
+        exists
         urn
         type
         name
         description
         origin
+        tags {
+            ...globalTagsFields
+        }
         platform {
             ...platformFields
         }
@@ -213,14 +324,43 @@ fragment lineageNodeProperties on EntityWithRelationships {
         }
         status {
             removed
+        }
+        browsePathV2 {
+            ...browsePathV2Fields
+        }
+        properties {
+            propertiesName: name
+            createdTS: created {
+                time
+                actor
+            }
+            customProperties {
+                key
+                value
+            }
+        }
+        editableProperties {
+            description
+        }
+        structuredProperties {
+            properties {
+                ...structuredPropertiesFields
+            }
+        }
+        browsePathV2 {
+            ...browsePathV2Fields
         }
     }
     ... on MLModel {
+        exists
         urn
         type
         name
         description
         origin
+        tags {
+            ...globalTagsFields
+        }
         platform {
             ...platformFields
         }
@@ -229,6 +369,42 @@ fragment lineageNodeProperties on EntityWithRelationships {
         }
         status {
             removed
+        }
+        versionProperties {
+            versionSet {
+                urn
+                type
+            }
+            version {
+                versionTag
+            }
+            aliases {
+                versionTag
+            }
+            comment
+        }
+        properties {
+            propertiesName: name
+            createdTS: created {
+                time
+                actor
+            }
+            tags
+            customProperties {
+                key
+                value
+            }
+        }
+        editableProperties {
+            description
+        }
+        structuredProperties {
+            properties {
+                ...structuredPropertiesFields
+            }
+        }
+        browsePathV2 {
+            ...browsePathV2Fields
         }
     }
     ... on MLFeatureTable {
@@ -239,6 +415,33 @@ fragment lineageNodeProperties on EntityWithRelationships {
     }
     ... on MLPrimaryKey {
         ...nonRecursiveMLPrimaryKey
+    }
+    ... on ERModelRelationship {
+        urn
+        type
+        id
+        properties {
+            ...ermodelrelationPropertiesFields
+        }
+        editableProperties {
+            ...ermodelrelationEditablePropertiesFields
+        }
+        ownership {
+            ...ownershipFields
+        }
+        tags {
+            ...globalTagsFields
+        }
+        glossaryTerms {
+            ...glossaryTerms
+        }
+    }
+    ... on Restricted {
+        urn
+        type
+    }
+    ... on DataProcessInstance {
+        ...dataProcessInstanceFields
     }
 }
 
@@ -255,6 +458,20 @@ fragment lineageFields on EntityWithRelationships {
                     exists
                 }
                 ...lineageNodeProperties
+            }
+        }
+        siblingsSearch(input: { query: "*", count: 5 }) {
+            count
+            total
+            searchResults {
+                entity {
+                    urn
+                    type
+                    ... on Dataset {
+                        exists
+                    }
+                    ...lineageNodeProperties
+                }
             }
         }
     }
@@ -349,6 +566,247 @@ fragment partialLineageResults on EntityLineageResult {
     filtered
 }
 
+fragment entityLineage on Entity {
+    urn
+    type
+    ...lineageNodeProperties
+    ...canEditLineageFragment
+    ... on Dataset {
+        schemaMetadata(version: 0) @include(if: $showColumns) {
+            ...schemaMetadataFields
+        }
+        siblings {
+            isPrimary
+            siblings {
+                urn
+                type
+                ... on Dataset {
+                    exists
+                }
+                ...lineageNodeProperties
+            }
+        }
+        siblingsSearch(input: { query: "*", count: 5 }) {
+            count
+            total
+            searchResults {
+                entity {
+                    urn
+                    type
+                    ... on Dataset {
+                        exists
+                    }
+                    ...lineageNodeProperties
+                }
+            }
+        }
+    }
+    ... on Chart {
+        inputFields @include(if: $showColumns) {
+            ...inputFieldsFields
+        }
+    }
+    ... on EntityWithRelationships {
+        upstream: lineage(
+            input: {
+                direction: UPSTREAM
+                start: 0
+                count: 100
+                separateSiblings: $separateSiblings
+                startTimeMillis: $startTimeMillis
+                endTimeMillis: $endTimeMillis
+            }
+        ) @skip(if: $excludeUpstream) {
+            ...fullLineageResults
+        }
+        downstream: lineage(
+            input: {
+                direction: DOWNSTREAM
+                start: 0
+                count: 100
+                separateSiblings: $separateSiblings
+                startTimeMillis: $startTimeMillis
+                endTimeMillis: $endTimeMillis
+            }
+        ) @skip(if: $excludeDownstream) {
+            ...fullLineageResults
+        }
+    }
+}
+
+fragment lineageV2Result on EntityLineageResult {
+    filtered
+    total
+    relationships {
+        ...lineageRelationshipFields
+        paths {
+            path {
+                urn
+                type
+            }
+        }
+        entity {
+            urn
+            type
+        }
+    }
+}
+
+fragment lineageSchemaField on SchemaField {
+    fieldPath
+    type
+    nativeDataType
+}
+
+fragment entityLineageV2 on Entity {
+    urn
+    type
+    ...lineageNodeProperties
+    ...canEditLineageFragment
+    ... on Dataset {
+        schemaMetadata(version: 0) @include(if: $showColumns) {
+            fields {
+                ...lineageSchemaField
+            }
+        }
+        siblingsSearch(input: { query: "*", count: 1 }) {
+            count
+            total
+            searchResults {
+                entity {
+                    urn
+                    type
+                    ... on Dataset {
+                        exists
+                        subTypes {
+                            typeNames
+                        }
+                        platform {
+                            ...platformFields
+                        }
+                    }
+                }
+            }
+        }
+    }
+    ... on Chart {
+        inputFields @include(if: $showColumns) {
+            fields {
+                schemaFieldUrn
+                schemaField {
+                    ...lineageSchemaField
+                }
+            }
+        }
+    }
+    ... on EntityWithRelationships {
+        upstream: lineage(
+            input: {
+                direction: UPSTREAM
+                start: 0
+                count: 1000
+                separateSiblings: $separateSiblings
+                startTimeMillis: $startTimeMillis
+                endTimeMillis: $endTimeMillis
+                includeGhostEntities: $includeGhostEntities
+            }
+        ) @skip(if: $excludeUpstream) {
+            ...lineageV2Result
+        }
+        downstream: lineage(
+            input: {
+                direction: DOWNSTREAM
+                start: 0
+                count: 1000
+                separateSiblings: $separateSiblings
+                startTimeMillis: $startTimeMillis
+                endTimeMillis: $endTimeMillis
+                includeGhostEntities: $includeGhostEntities
+            }
+        ) @skip(if: $excludeDownstream) {
+            ...lineageV2Result
+        }
+    }
+    ... on SupportsVersions {
+        versionProperties {
+            ...versionProperties
+        }
+    }
+    ... on SchemaFieldEntity {
+        fieldPath
+        parent {
+            urn
+            type
+            ...lineageNodeProperties
+        }
+        status {
+            removed
+        }
+    }
+    ... on QueryEntity {
+        properties {
+            origin {
+                urn
+                type
+            }
+        }
+        queryPlatform: platform {
+            ...platformFields
+        }
+    }
+    ... on DataProcessInstance {
+        ...dataProcessInstanceFields
+    }
+    ... on Domain {
+        id
+        properties {
+            name
+            description
+        }
+        parentDomains {
+            ...parentDomainsFields
+        }
+        displayProperties {
+            ...displayPropertiesFields
+        }
+        dataProducts: entities(
+            input: { start: 0, count: 0, filters: [{ field: "_entityType", value: "DATA_PRODUCT" }] }
+        ) {
+            total
+            searchResults {
+                entity {
+                    ... on DataProduct {
+                        urn
+                        type
+                        properties {
+                            name
+                            description
+                        }
+                        domain {
+                            ...entityDomain
+                        }
+                        entities(input: { start: 0, count: 0, query: "*" }) {
+                            total
+                        }
+                    }
+                }
+            }
+        }
+    }
+    ... on DataProduct {
+        properties {
+            name
+            description
+        }
+        domain {
+            ...entityDomain
+        }
+        entities(input: { start: 0, count: 0, query: "*" }) {
+            total
+        }
+    }
+}
+
 query getEntityLineage(
     $urn: String!
     $separateSiblings: Boolean
@@ -359,57 +817,37 @@ query getEntityLineage(
     $excludeDownstream: Boolean = false
 ) {
     entity(urn: $urn) {
-        urn
-        type
-        ...lineageNodeProperties
-        ...canEditLineageFragment
-        ... on Dataset {
-            schemaMetadata(version: 0) @include(if: $showColumns) {
-                ...schemaMetadataFields
-            }
-            siblings {
-                isPrimary
-                siblings {
-                    urn
-                    type
-                    ... on Dataset {
-                        exists
-                    }
-                    ...lineageNodeProperties
-                }
-            }
-        }
-        ... on Chart {
-            inputFields @include(if: $showColumns) {
-                ...inputFieldsFields
-            }
-        }
-        ... on EntityWithRelationships {
-            upstream: lineage(
-                input: {
-                    direction: UPSTREAM
-                    start: 0
-                    count: 100
-                    separateSiblings: $separateSiblings
-                    startTimeMillis: $startTimeMillis
-                    endTimeMillis: $endTimeMillis
-                }
-            ) @skip(if: $excludeUpstream) {
-                ...fullLineageResults
-            }
-            downstream: lineage(
-                input: {
-                    direction: DOWNSTREAM
-                    start: 0
-                    count: 100
-                    separateSiblings: $separateSiblings
-                    startTimeMillis: $startTimeMillis
-                    endTimeMillis: $endTimeMillis
-                }
-            ) @skip(if: $excludeDownstream) {
-                ...fullLineageResults
-            }
-        }
+        ...entityLineage
+    }
+}
+
+query getEntityLineageV2(
+    $urn: String!
+    $separateSiblings: Boolean
+    $showColumns: Boolean!
+    $startTimeMillis: Long
+    $endTimeMillis: Long
+    $excludeUpstream: Boolean = false
+    $excludeDownstream: Boolean = false
+    $includeGhostEntities: Boolean = false
+) {
+    entity(urn: $urn) {
+        ...entityLineageV2
+    }
+}
+
+query getBulkEntityLineageV2(
+    $urns: [String!]!
+    $separateSiblings: Boolean
+    $showColumns: Boolean!
+    $startTimeMillis: Long
+    $endTimeMillis: Long
+    $excludeUpstream: Boolean = false
+    $excludeDownstream: Boolean = false
+    $includeGhostEntities: Boolean = false
+) {
+    entities(urns: $urns) {
+        ...entityLineageV2
     }
 }
 
@@ -443,6 +881,7 @@ query getLineageCounts(
     $endTimeMillis: Long
     $excludeUpstream: Boolean = false
     $excludeDownstream: Boolean = false
+    $includeGhostEntities: Boolean = false
 ) {
     entity(urn: $urn) {
         urn
@@ -456,6 +895,7 @@ query getLineageCounts(
                     separateSiblings: $separateSiblings
                     startTimeMillis: $startTimeMillis
                     endTimeMillis: $endTimeMillis
+                    includeGhostEntities: $includeGhostEntities
                 }
             ) @skip(if: $excludeUpstream) {
                 filtered
@@ -469,10 +909,71 @@ query getLineageCounts(
                     separateSiblings: $separateSiblings
                     startTimeMillis: $startTimeMillis
                     endTimeMillis: $endTimeMillis
+                    includeGhostEntities: $includeGhostEntities
                 }
             ) @skip(if: $excludeDownstream) {
                 filtered
                 total
+            }
+        }
+    }
+}
+
+query getSearchAcrossLineageCounts(
+    $urn: String!
+    $startTimeMillis: Long
+    $endTimeMillis: Long
+    $excludeUpstream: Boolean = false
+    $excludeDownstream: Boolean = false
+) {
+    upstreams: searchAcrossLineage(
+        input: {
+            urn: $urn
+            query: "*"
+            start: 0
+            count: 2000
+            filters: [{ field: "degree", value: "1", values: ["1"] }]
+            direction: UPSTREAM
+            lineageFlags: { startTimeMillis: $startTimeMillis, endTimeMillis: $endTimeMillis }
+        }
+    ) @skip(if: $excludeUpstream) {
+        start
+        count
+        total
+        facets {
+            ...facetFields
+        }
+    }
+    downstreams: searchAcrossLineage(
+        input: {
+            urn: $urn
+            query: "*"
+            start: 0
+            count: 2000
+            filters: [{ field: "degree", value: "1", values: ["1"] }]
+            direction: DOWNSTREAM
+            lineageFlags: { startTimeMillis: $startTimeMillis, endTimeMillis: $endTimeMillis }
+        }
+    ) @skip(if: $excludeDownstream) {
+        start
+        count
+        total
+        facets {
+            ...facetFields
+        }
+    }
+}
+
+query searchAcrossLineageNames($input: SearchAcrossLineageInput!) {
+    searchAcrossLineage(input: $input) {
+        start
+        count
+        total
+        searchResults {
+            entity {
+                urn
+                type
+                ...entityDisplayNameFields
             }
         }
     }

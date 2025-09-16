@@ -1,18 +1,18 @@
-import React, { useCallback } from 'react';
-import { Button, Checkbox, Divider, Empty, List, ListProps } from 'antd';
+import { Checkbox, Divider, List, ListProps } from 'antd';
+import React from 'react';
 import styled from 'styled-components';
-import { useHistory } from 'react-router';
-import { RocketOutlined } from '@ant-design/icons';
-import { navigateToSearchUrl } from './utils/navigateToSearchUrl';
-import { ANTD_GRAY } from '../entity/shared/constants';
-import { SEPARATE_SIBLINGS_URL_PARAM } from '../entity/shared/siblingUtils';
-import { CompactEntityNameList } from '../recommendations/renderer/component/CompactEntityNameList';
-import { useEntityRegistry } from '../useEntityRegistry';
-import { SearchResult } from '../../types.generated';
-import analytics, { EventType } from '../analytics';
-import { EntityAndType } from '../entity/shared/types';
-import { useIsSearchV2 } from './useSearchAndBrowseVersion';
-import { CombinedSearchResult } from './utils/combineSiblingsInSearchResults';
+
+import analytics, { EventType } from '@app/analytics';
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+import { SEPARATE_SIBLINGS_URL_PARAM } from '@app/entity/shared/siblingUtils';
+import { EntityAndType } from '@app/entity/shared/types';
+import { CompactEntityNameList } from '@app/recommendations/renderer/component/CompactEntityNameList';
+import EmptySearchResults from '@app/search/EmptySearchResults';
+import { useIsSearchV2 } from '@app/search/useSearchAndBrowseVersion';
+import { CombinedSearchResult } from '@app/search/utils/combineSiblingsInSearchResults';
+import { useEntityRegistry } from '@app/useEntityRegistry';
+
+import { SearchResult, SearchSuggestion } from '@types';
 
 const ResultList = styled(List)`
     &&& {
@@ -28,19 +28,12 @@ const StyledCheckbox = styled(Checkbox)`
     margin-right: 12px;
 `;
 
-const NoDataContainer = styled.div`
-    > div {
-        margin-top: 28px;
-        margin-bottom: 28px;
-    }
-`;
-
 const ThinDivider = styled(Divider)`
     margin-top: 16px;
     margin-bottom: 16px;
 `;
 
-const ResultWrapper = styled.div<{ showUpdatedStyles: boolean }>`
+export const ResultWrapper = styled.div<{ showUpdatedStyles: boolean }>`
     ${(props) =>
         props.showUpdatedStyles &&
         `    
@@ -48,7 +41,6 @@ const ResultWrapper = styled.div<{ showUpdatedStyles: boolean }>`
         border-radius: 5px;
         margin: 0 auto 8px auto;
         padding: 8px 16px;
-        max-width: 1200px;
         border-bottom: 1px solid ${ANTD_GRAY[5]};
     `}
 `;
@@ -64,31 +56,31 @@ const ListItem = styled.div<{ isSelectMode: boolean }>`
 `;
 
 type Props = {
+    loading: boolean;
     query: string;
     searchResults: CombinedSearchResult[];
     totalResultCount: number;
     isSelectMode: boolean;
     selectedEntities: EntityAndType[];
     setSelectedEntities: (entities: EntityAndType[]) => any;
+    suggestions: SearchSuggestion[];
+    pageNumber: number;
 };
 
 export const SearchResultList = ({
+    loading,
     query,
     searchResults,
     totalResultCount,
     isSelectMode,
     selectedEntities,
     setSelectedEntities,
+    suggestions,
+    pageNumber,
 }: Props) => {
-    const history = useHistory();
     const entityRegistry = useEntityRegistry();
     const selectedEntityUrns = selectedEntities.map((entity) => entity.urn);
     const showSearchFiltersV2 = useIsSearchV2();
-
-    const onClickExploreAll = useCallback(() => {
-        analytics.event({ type: EventType.SearchResultsExploreAllClickEvent });
-        navigateToSearchUrl({ query: '*', history });
-    }, [history]);
 
     const onClickResult = (result: SearchResult, index: number) => {
         analytics.event({
@@ -98,6 +90,7 @@ export const SearchResultList = ({
             entityType: result.entity.type,
             index,
             total: totalResultCount,
+            pageNumber,
         });
     };
 
@@ -118,19 +111,7 @@ export const SearchResultList = ({
                 id="search-result-list"
                 dataSource={searchResults}
                 split={false}
-                locale={{
-                    emptyText: (
-                        <NoDataContainer>
-                            <Empty
-                                style={{ fontSize: 18, color: ANTD_GRAY[8] }}
-                                description={`No results found for "${query}"`}
-                            />
-                            <Button onClick={onClickExploreAll}>
-                                <RocketOutlined /> Explore all
-                            </Button>
-                        </NoDataContainer>
-                    ),
-                }}
+                locale={{ emptyText: (!loading && <EmptySearchResults suggestions={suggestions} />) || <></> }}
                 renderItem={(item, index) => (
                     <ResultWrapper showUpdatedStyles={showSearchFiltersV2} className={`entityUrn-${item.entity.urn}`}>
                         <ListItem

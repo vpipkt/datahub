@@ -1,8 +1,10 @@
 import React from 'react';
-import { LineageDirection } from '../../../../../types.generated';
-import generateUseSearchResultsViaRelationshipHook from './generateUseSearchResultsViaRelationshipHook';
-import { EmbeddedListSearchSection } from '../../components/styled/search/EmbeddedListSearchSection';
-import generateUseDownloadScrollAcrossLineageSearchResultsHook from './generateUseDownloadScrollAcrossLineageSearchResultsHook';
+
+import { EmbeddedListSearchSection } from '@app/entity/shared/components/styled/search/EmbeddedListSearchSection';
+import generateUseDownloadScrollAcrossLineageSearchResultsHook from '@app/entity/shared/tabs/Lineage/generateUseDownloadScrollAcrossLineageSearchResultsHook';
+import generateUseSearchResultsViaRelationshipHook from '@app/entity/shared/tabs/Lineage/generateUseSearchResultsViaRelationshipHook';
+
+import { LineageDirection } from '@types';
 
 type Props = {
     urn: string;
@@ -13,6 +15,8 @@ type Props = {
     skipCache?: boolean;
     setSkipCache?: (skipCache: boolean) => void;
     resetShouldRefetch?: () => void;
+    onLineageClick?: () => void;
+    isLineageTab?: boolean;
 };
 
 export const ImpactAnalysis = ({
@@ -24,6 +28,8 @@ export const ImpactAnalysis = ({
     skipCache,
     setSkipCache,
     resetShouldRefetch,
+    onLineageClick,
+    isLineageTab,
 }: Props) => {
     const finalStartTimeMillis = startTimeMillis || undefined;
     const finalEndTimeMillis = endTimeMillis || undefined;
@@ -49,6 +55,8 @@ export const ImpactAnalysis = ({
             defaultFilters={[{ field: 'degree', values: ['1'] }]}
             shouldRefetch={shouldRefetch}
             resetShouldRefetch={resetShouldRefetch}
+            onLineageClick={onLineageClick}
+            isLineageTab={isLineageTab}
         />
     );
 };

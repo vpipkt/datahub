@@ -1,8 +1,11 @@
+import java.nio.file.FileSystems
+import java.nio.file.Paths
+
 plugins {
   id 'java'
+  id 'distribution'
+  id 'com.github.node-gradle.node'
 }
-apply plugin: 'distribution'
-apply plugin: 'com.github.node-gradle.node'
 
 node {
 
@@ -16,10 +19,10 @@ node {
   }
 
   // Version of node to use.
-  version = '16.8.0'
+  version = '22.16.0'
 
   // Version of Yarn to use.
-  yarnVersion = '1.22.0'
+  yarnVersion = '1.22.22'
 
   // Base URL for fetching node distributions (set nodeDistBaseUrl if you have a mirror).
   if (project.hasProperty('nodeDistBaseUrl')) {
@@ -35,7 +38,7 @@ node {
   yarnWorkDir = file("${project.projectDir}/.gradle/yarn")
 
   // Set the work directory where node_modules should be located
-  nodeModulesDir = file("${project.projectDir}")
+  nodeProjectDir = file("${project.projectDir}")
 
 }
 
@@ -43,74 +46,243 @@ node {
   Wrappers around Yarn Tasks.
  */
 task yarnInstall(type: YarnTask) {
-  args = ['install']
+  args = ['install', '--network-timeout', '300000']
+
+  // The node_modules directory can contain built artifacts, so
+  // it's not really safe to cache it.
+  outputs.cacheIf { false }
+
+  inputs.files(
+    file('yarn.lock'),
+    file('package.json'),
+  )
+  outputs.dir('node_modules')
 }
 
 task yarnGenerate(type: YarnTask, dependsOn: yarnInstall) {
   args = ['run', 'generate']
+
+  outputs.cacheIf { true }
+
+  inputs.files(
+    yarnInstall.inputs.files,
+    file('codegen.yml'),
+    project.fileTree(dir: "../datahub-graphql-core/src/main/resources/", include: "*.graphql"),
+    project.fileTree(dir: "src", include: "**/*.graphql"),
+  )
+
+  outputs.files(
+    project.fileTree(dir: "src", include: "**/*.generated.ts"),
+  )
+
+  doFirst{
+    delete fileTree(dir: 'src', include: '**/*.generated.ts')
+  }
 }
 
 task yarnServe(type: YarnTask, dependsOn: [yarnInstall, yarnGenerate]) {
-  args = ['run', 'start',  '--proxy', 'http://localhost:9001']
+  environment.put('REACT_APP_PROXY_TARGET', 'http://localhost:9001')
+  args = ['run', 'start']
+}
+
+task yarnPreview(type: YarnTask, dependsOn: [yarnInstall, yarnGenerate]) {
+  environment.put('REACT_APP_PROXY_TARGET', project.findProperty('proxy') ?: 'http://localhost:9001')
+  args = ['run', 'preview']
 }
 
 task yarnTest(type: YarnTask, dependsOn: [yarnInstall, yarnGenerate]) {
-  args = ['run', 'test', '--watchAll', 'false']
+  // Explicitly runs in non-watch mode.
+  args = ['run', project.hasProperty('withCoverage') ? 'test-coverage' : 'test', 'run']
+  def test_sentinel = "${buildDir}/.yarn-test-sentinel"
+  outputs.file(test_sentinel)
+  inputs.files(project.fileTree(dir: 'src', include: ['**/*.ts', '**/*.tsx']))
+  doLast {
+    // touch a file with name yarn-lint.txt in the build directory
+    def file = file(test_sentinel)
+    if (!file.exists()) {
+      file.createNewFile()
+    } else {
+      file.setLastModified(System.currentTimeMillis())
+    }
+  }
+  outputs.cacheIf { true }
 }
 
 task yarnLint(type: YarnTask, dependsOn: [yarnInstall, yarnGenerate]) {
-  args = ['run', 'lint']
+  def targetFile = project.findProperty('file') ?: ''
+  
+  if (targetFile.isEmpty()) {
+    // Run on all files
+    args = ['run', 'lint']
+  } else {
+    // Run on specific file - run lint, format-check, and type-check
+    doFirst {
+      // Run lint-file first
+      exec {
+        workingDir projectDir
+        commandLine 'yarn', 'run', 'lint-file', targetFile
+      }
+      // Then run format-check-file
+      exec {
+        workingDir projectDir
+        commandLine 'yarn', 'run', 'format-check-file', targetFile
+      }
+      // This does not run full type-check when we run for a single file
+      // as that would take too long
+    }
+    outputs.cacheIf { false }
+  }
 }
 
 test.dependsOn([yarnInstall, yarnTest, yarnLint])
 
 task yarnLintFix(type: YarnTask, dependsOn: [yarnInstall, yarnGenerate]) {
-  args = ['run', 'lint-fix']
+  def targetFile = project.findProperty('file') ?: ''
+  
+  if (targetFile.isEmpty()) {
+    // Run on all files
+    args = ['run', 'lint-fix']
+    def lint_sentinel = "${buildDir}/.yarn-lint-sentinel"
+    outputs.file(lint_sentinel)
+    inputs.files(project.fileTree(dir: 'src', include: ['**/*.ts', '**/*.tsx']))
+    doLast {
+      // touch a file with name yarn-lint.txt in the build directory
+      def file = file(lint_sentinel)
+      if (!file.exists()) {
+        file.createNewFile()
+      } else {
+        file.setLastModified(System.currentTimeMillis())
+      }
+    }
+    outputs.cacheIf { true }
+  } else {
+    // Run on specific file - need to run both lint-fix and format
+    doFirst {
+      // Run lint-fix-file first
+      exec {
+        workingDir projectDir
+        commandLine 'yarn', 'run', 'lint-fix-file', targetFile
+      }
+      // Then run format-file
+      exec {
+        workingDir projectDir
+        commandLine 'yarn', 'run', 'format-file', targetFile
+      }
+    }
+    outputs.cacheIf { false }
+  }
 }
 
-task yarnBuild(type: YarnTask, dependsOn: [yarnInstall, yarnTest, yarnLint]) {
-  args = ['run', 'build']
+task yarnBuild(type: YarnTask, dependsOn: [yarnInstall, yarnGenerate]) {
+  args = ['run', project.hasProperty('sourcemap') ? 'buildWithSourceMap' :'build']
+
+  outputs.cacheIf { true }
+  inputs.files(
+    file('index.html'),
+    project.fileTree(dir: "src"),
+    project.fileTree(dir: "public"),
+
+    yarnInstall.inputs.files,
+    yarnGenerate.outputs.files,
+
+    file('.env'),
+    file('vite.config.ts'),
+    file('tsconfig.json'),
+  )
+  outputs.dir('dist')
 }
 
-task yarnQuickBuild(type: YarnTask, dependsOn: [yarnInstall, yarnGenerate]) {
-  environment = [NODE_OPTIONS: "--max-old-space-size=3072"]
-  args = ['run', 'build']
+task copyCapabilitySummary(type: Copy) {
+  def sourceFile = file('../metadata-ingestion/src/datahub/ingestion/autogenerated/capability_summary.json')
+  
+  if (!sourceFile.exists()) {
+    // We don't want frontend devs to have to run this task
+    // But still keeping it here to make sure the dependency is there properly in gradle
+    dependsOn ':metadata-ingestion:capabilitySummary'
+  }
+  
+  from sourceFile
+  into 'public/assets/ingestion'
+  
+  inputs.file(sourceFile)
+  outputs.file('public/assets/ingestion/capability_summary.json')
 }
 
-task cleanExtraDirs {
+yarnBuild.dependsOn copyCapabilitySummary
+
+// Define a list of configurations for prettier tasks
+def externalPrettierConfigs = [
+    [
+        name: 'graphql',
+        pattern: 'datahub-graphql-core/src/main/resources/**/*.graphql'
+    ],
+    [
+        name: 'githubActions',
+        pattern: '.github/**/*.{yml,yaml}'
+    ],
+    [
+        name: 'md',
+        pattern: '**/*.md'
+    ]
+]
+
+// Iterate through the configurations to create check and write tasks
+externalPrettierConfigs.each { config ->
+  tasks.register("${config.name}PrettierCheck", YarnTask) {
+    dependsOn(tasks.named('yarnInstall'))
+    args = ['run', 'prettier', '--check', "../${config.pattern}"]
+  }
+
+  tasks.register("${config.name}PrettierWrite", YarnTask) {
+    dependsOn(tasks.named('yarnInstall'))
+    args = ['run', 'prettier', '--write', "../${config.pattern}"]
+  }
+
+  tasks.register("${config.name}PrettierWriteChanged", YarnTask) {
+    // Get the list of changed Markdown files using Git
+    def changedFiles = new ByteArrayOutputStream()
+    exec {
+      commandLine 'git', 'diff', '--name-only', '--diff-filter=ACMRT', 'HEAD'
+      standardOutput = changedFiles
+    }
+    def allChangedFiles = changedFiles.toString().trim().split('\n').findAll { it != '' }
+    def matcher = FileSystems.getDefault().getPathMatcher("glob:${config.pattern}")
+    def matchingFiles = allChangedFiles.findAll { file -> matcher.matches(Paths.get(file)) }
+
+    if (matchingFiles.isEmpty()) {
+      logger.lifecycle("No changed files found matching ${config.pattern}.")
+      return
+    }
+
+    logger.lifecycle("Running Prettier on ${matchingFiles.size()} changed ${config.name} files")
+    args = ['run', 'prettier', '--write'] + matchingFiles.collect { "../${it}" }
+  }
+}
+
+clean {
   delete 'node_modules/.yarn-integrity'
   delete 'dist'
   delete 'tmp'
   delete 'just'
-  delete 'src/types.generated.ts'
-  delete fileTree('../datahub-frontend/public')
-  delete fileTree(dir: 'src/graphql', include: '*.generated.ts')
+  delete fileTree(dir: 'src', include: '**/*.generated.ts')
+  delete 'public/assets/capability_summary.json'
 }
-clean.finalizedBy(cleanExtraDirs)
 
 configurations {
   assets
 }
 
 distZip {
-  dependsOn yarnQuickBuild
-  baseName 'datahub-web-react'
+  dependsOn yarnBuild
+  archiveFileName = "datahub-web-react-${archiveVersion}.${archiveExtension}"
   from 'dist'
 }
 
-task copyAssets(dependsOn: distZip) {
-  doLast {
-    copy {
-      from zipTree(distZip.outputs.files.first())
-      into "../datahub-frontend/public"
-    }
-  }
-}
-
 jar {
-  dependsOn distZip, copyAssets
+  dependsOn yarnBuild
   into('public') {
-    from zipTree(distZip.outputs.files.first())
+    from 'dist'
   }
-  classifier = 'assets'
+  archiveClassifier = 'assets'
 }
+build.dependsOn jar

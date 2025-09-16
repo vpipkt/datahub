@@ -1,5 +1,6 @@
 import React from 'react';
-import { AppConfig } from './types.generated';
+
+import { AppConfig, PersonalSidebarSection, SearchBarApi } from '@types';
 
 export const DEFAULT_APP_CONFIG = {
     analyticsConfig: {
@@ -27,6 +28,9 @@ export const DEFAULT_APP_CONFIG = {
         entityProfile: {
             domainDefaultTab: null,
         },
+        searchResult: {
+            enableNameHighlight: false,
+        },
     },
     authConfig: {
         tokenAuthEnabled: false,
@@ -40,15 +44,61 @@ export const DEFAULT_APP_CONFIG = {
     viewsConfig: {
         enabled: false,
     },
+    searchBarConfig: {
+        apiVariant: SearchBarApi.AutocompleteForMultiple,
+    },
+    searchCardConfig: {
+        showDescription: false,
+    },
+    homePageConfig: {
+        firstInPersonalSidebar: PersonalSidebarSection.YourAssets,
+    },
     featureFlags: {
         readOnlyModeEnabled: false,
         showSearchFiltersV2: true,
         showBrowseV2: true,
         showAcrylInfo: false,
+        erModelRelationshipFeatureEnabled: false,
+        showAccessManagement: false,
+        nestedDomainsEnabled: true,
+        platformBrowseV2: false,
+        businessAttributeEntityEnabled: false,
+        dataContractsEnabled: false,
+        editableDatasetNameEnabled: false,
+        themeV2Enabled: false,
+        themeV2Default: false,
+        themeV2Toggleable: false,
+        lineageGraphV2: false,
+        showSeparateSiblings: false,
+        schemaFieldCLLEnabled: false,
+        schemaFieldLineageIgnoreStatus: false,
+        showManageStructuredProperties: false,
+        hideDbtSourceInLineage: false,
+        showNavBarRedesign: false,
+        showAutoCompleteResults: false,
+        entityVersioningEnabled: false,
+        showHasSiblingsFilter: false,
+        showSearchBarAutocompleteRedesign: false,
+        showManageTags: false,
+        showIntroducePage: false,
+        showIngestionPageRedesign: false,
+        showLineageExpandMore: false,
+        showStatsTabRedesign: false,
+        showHomePageRedesign: false,
+        showProductUpdates: false,
+        lineageGraphV3: false,
+        logicalModelsEnabled: false,
+        showHomepageUserRole: false,
+        assetSummaryPageV1: false,
+    },
+    chromeExtensionConfig: {
+        enabled: false,
+        lineageEnabled: false,
     },
 };
 
 export const AppConfigContext = React.createContext<{
     config: AppConfig;
+    loaded: boolean;
     refreshContext: () => void;
-}>({ config: DEFAULT_APP_CONFIG, refreshContext: () => null });
+}>({ config: DEFAULT_APP_CONFIG, loaded: false, refreshContext: () => null });

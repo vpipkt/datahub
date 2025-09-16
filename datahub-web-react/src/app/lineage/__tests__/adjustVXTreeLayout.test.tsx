@@ -1,7 +1,11 @@
-import React from 'react';
-import { Tree, hierarchy } from '@vx/hierarchy';
 import { render } from '@testing-library/react';
+import { Tree, hierarchy } from '@visx/hierarchy';
+import React from 'react';
 
+import { Direction, EntityAndType, NodeData } from '@app/lineage/types';
+import adjustVXTreeLayout from '@app/lineage/utils/adjustVXTreeLayout';
+import constructTree from '@app/lineage/utils/constructTree';
+import extendAsyncEntities from '@app/lineage/utils/extendAsyncEntities';
 import {
     dataset3WithLineage,
     dataset4WithLineage,
@@ -10,13 +14,10 @@ import {
     dataset6WithLineage,
     dataset7WithLineage,
     dataset7WithSelfReferentialLineage,
-} from '../../../Mocks';
-import constructTree from '../utils/constructTree';
-import extendAsyncEntities from '../utils/extendAsyncEntities';
-import adjustVXTreeLayout from '../utils/adjustVXTreeLayout';
-import { NodeData, Direction, FetchedEntities } from '../types';
-import { getTestEntityRegistry } from '../../../utils/test-utils/TestPageContainer';
-import { EntityType } from '../../../types.generated';
+} from '@src/Mocks';
+import { getTestEntityRegistry } from '@utils/test-utils/TestPageContainer';
+
+import { Dataset, Entity, EntityType } from '@types';
 
 const testEntityRegistry = getTestEntityRegistry();
 
@@ -34,10 +35,10 @@ describe('adjustVXTreeLayout', () => {
                     {},
                     acc,
                     testEntityRegistry,
-                    { entity: entry.entity, type: EntityType.Dataset },
+                    { entity: entry.entity, type: EntityType.Dataset } as EntityAndType,
                     entry.fullyFetched,
                 ),
-            {} as FetchedEntities,
+            new Map(),
         );
 
         const downstreamData = hierarchy(
@@ -85,10 +86,10 @@ describe('adjustVXTreeLayout', () => {
                     {},
                     acc,
                     testEntityRegistry,
-                    { entity: entry.entity, type: EntityType.Dataset },
+                    { entity: entry.entity, type: EntityType.Dataset } as EntityAndType,
                     entry.fullyFetched,
                 ),
-            {} as FetchedEntities,
+            new Map(),
         );
 
         const upstreamData = hierarchy(
@@ -141,15 +142,15 @@ describe('adjustVXTreeLayout', () => {
                     {},
                     acc,
                     testEntityRegistry,
-                    { entity: entry.entity, type: EntityType.Dataset },
+                    { entity: entry.entity, type: EntityType.Dataset } as EntityAndType,
                     entry.fullyFetched,
                 ),
-            {} as FetchedEntities,
+            new Map(),
         );
 
         const upstreamData = hierarchy(
             constructTree(
-                { entity: dataset7WithSelfReferentialLineage, type: EntityType.Dataset },
+                { entity: dataset7WithSelfReferentialLineage as Entity, type: EntityType.Dataset } as EntityAndType,
                 mockFetchedEntities,
                 Direction.Upstream,
                 testEntityRegistry,
@@ -186,10 +187,10 @@ describe('adjustVXTreeLayout', () => {
                     {},
                     acc,
                     testEntityRegistry,
-                    { entity: entry.entity, type: EntityType.Dataset },
+                    { entity: entry.entity as Dataset, type: EntityType.Dataset },
                     entry.fullyFetched,
                 ),
-            {} as FetchedEntities,
+            new Map(),
         );
 
         const upstreamData = hierarchy(
@@ -231,10 +232,10 @@ describe('adjustVXTreeLayout', () => {
                     {},
                     acc,
                     testEntityRegistry,
-                    { entity: entry.entity, type: EntityType.Dataset },
+                    { entity: entry.entity as Dataset, type: EntityType.Dataset },
                     entry.fullyFetched,
                 ),
-            {} as FetchedEntities,
+            new Map(),
         );
 
         const upstreamData = hierarchy(

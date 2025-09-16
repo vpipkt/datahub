@@ -1,5 +1,20 @@
 query getMLModelGroup($urn: String!) {
     mlModelGroup(urn: $urn) {
+        urn
+        type
+        properties {
+            name
+            description
+            created {
+                time
+                actor
+            }
+            lastModified {
+                time
+                actor
+            }
+            externalUrl
+        }
         ...nonRecursiveMLModelGroupFields
         incoming: relationships(
             input: {
@@ -21,5 +36,20 @@ query getMLModelGroup($urn: String!) {
         ) {
             ...fullRelationshipResults
         }
+        privileges {
+            ...entityPrivileges
+        }
+        autoRenderAspects: aspects(input: { autoRenderOnly: true }) {
+            ...autoRenderAspectFields
+        }
+        structuredProperties {
+            properties {
+                ...structuredPropertiesFields
+            }
+        }
+        forms {
+            ...formsFields
+        }
+        ...notes
     }
 }

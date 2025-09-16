@@ -1,7 +1,13 @@
+import { ClockCircleOutlined } from '@ant-design/icons';
+import { Typography } from 'antd';
 import React from 'react';
 import styled from 'styled-components';
-import { Typography } from 'antd';
-import { ClockCircleOutlined } from '@ant-design/icons';
+
+import { IconStyleType } from '@app/entity/Entity';
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+import DefaultPreviewCard from '@app/preview/DefaultPreviewCard';
+import { toRelativeTimeString } from '@app/shared/time/timeUtils';
+import { useEntityRegistry } from '@app/useEntityRegistry';
 
 import {
     DataProduct,
@@ -10,14 +16,11 @@ import {
     EntityPath,
     EntityType,
     GlobalTags,
+    Health,
     Owner,
+    ParentContainersResult,
     SearchInsight,
-} from '../../../../types.generated';
-import DefaultPreviewCard from '../../../preview/DefaultPreviewCard';
-import { useEntityRegistry } from '../../../useEntityRegistry';
-import { IconStyleType } from '../../Entity';
-import { ANTD_GRAY } from '../../shared/constants';
-import { toRelativeTimeString } from '../../../shared/time/timeUtils';
+} from '@types';
 
 const StatText = styled(Typography.Text)`
     color: ${ANTD_GRAY[8]};
@@ -26,6 +29,7 @@ const StatText = styled(Typography.Text)`
 export const Preview = ({
     urn,
     name,
+    subType,
     description,
     platformName,
     platformLogo,
@@ -41,9 +45,12 @@ export const Preview = ({
     externalUrl,
     degree,
     paths,
+    health,
+    parentContainers,
 }: {
     urn: string;
     name: string;
+    subType?: string | null;
     description?: string | null;
     platformName: string;
     platformLogo?: string | null;
@@ -59,6 +66,8 @@ export const Preview = ({
     externalUrl?: string | null;
     degree?: number;
     paths?: EntityPath[];
+    health?: Health[] | null;
+    parentContainers?: ParentContainersResult | null;
 }): JSX.Element => {
     const entityRegistry = useEntityRegistry();
     return (
@@ -67,7 +76,7 @@ export const Preview = ({
             name={name}
             urn={urn}
             description={description || ''}
-            type="Data Task"
+            type={subType || 'Data Task'}
             typeIcon={entityRegistry.getIcon(EntityType.DataJob, 14, IconStyleType.ACCENT)}
             platform={platformName}
             logoUrl={platformLogo || ''}
@@ -92,6 +101,8 @@ export const Preview = ({
             }
             degree={degree}
             paths={paths}
+            health={health || undefined}
+            parentContainers={parentContainers}
         />
     );
 };

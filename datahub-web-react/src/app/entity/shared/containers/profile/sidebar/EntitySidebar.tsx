@@ -1,10 +1,10 @@
 import React from 'react';
 import styled from 'styled-components/macro';
 
-import { ANTD_GRAY } from '../../../constants';
-import { useBaseEntity, useEntityData } from '../../../EntityContext';
-import { EntitySidebarSection } from '../../../types';
-import LastIngested from './LastIngested';
+import { useBaseEntity, useEntityData } from '@app/entity/shared/EntityContext';
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+import LastIngested from '@app/entity/shared/containers/profile/sidebar/LastIngested';
+import { EntitySidebarSection } from '@app/entity/shared/types';
 
 const ContentContainer = styled.div`
     position: relative;
@@ -36,15 +36,17 @@ const LastIngestedSection = styled.div`
 
 type Props = {
     sidebarSections: EntitySidebarSection[];
+    topSection?: EntitySidebarSection;
 };
 
-export const EntitySidebar = <T,>({ sidebarSections }: Props) => {
+export const EntitySidebar = <T,>({ sidebarSections, topSection }: Props) => {
     const { entityData } = useEntityData();
     const baseEntity = useBaseEntity<T>();
 
     return (
         <>
-            {entityData?.lastIngested && (
+            {topSection && <topSection.component key={`${topSection.component}`} properties={topSection.properties} />}
+            {!!entityData?.lastIngested && (
                 <LastIngestedSection>
                     <LastIngested lastIngested={entityData.lastIngested} />
                 </LastIngestedSection>

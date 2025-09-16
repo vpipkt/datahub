@@ -1,25 +1,23 @@
-import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react';
 import { MockedProvider } from '@apollo/client/testing';
-import TestPageContainer from '../../../../../../utils/test-utils/TestPageContainer';
-import { mocks } from '../../../../../../Mocks';
-import { EntityProfile } from '../EntityProfile';
-import {
-    useGetDatasetQuery,
-    useUpdateDatasetMutation,
-    GetDatasetQuery,
-} from '../../../../../../graphql/dataset.generated';
-import { EntityType } from '../../../../../../types.generated';
-import QueriesTab from '../../../tabs/Dataset/Queries/QueriesTab';
-import { SchemaTab } from '../../../tabs/Dataset/Schema/SchemaTab';
-import StatsTab from '../../../tabs/Dataset/Stats/StatsTab';
-import { DocumentationTab } from '../../../tabs/Documentation/DocumentationTab';
-import { LineageTab } from '../../../tabs/Lineage/LineageTab';
-import { PropertiesTab } from '../../../tabs/Properties/PropertiesTab';
-import { SidebarStatsSection } from '../sidebar/Dataset/StatsSidebarSection';
-import { SidebarOwnerSection } from '../sidebar/Ownership/sidebar/SidebarOwnerSection';
-import { SidebarAboutSection } from '../sidebar/AboutSection/SidebarAboutSection';
-import { SidebarTagsSection } from '../sidebar/SidebarTagsSection';
+import { fireEvent, render, waitFor } from '@testing-library/react';
+import React from 'react';
+
+import { EntityProfile } from '@app/entity/shared/containers/profile/EntityProfile';
+import { SidebarAboutSection } from '@app/entity/shared/containers/profile/sidebar/AboutSection/SidebarAboutSection';
+import { SidebarStatsSection } from '@app/entity/shared/containers/profile/sidebar/Dataset/StatsSidebarSection';
+import { SidebarOwnerSection } from '@app/entity/shared/containers/profile/sidebar/Ownership/sidebar/SidebarOwnerSection';
+import { SidebarTagsSection } from '@app/entity/shared/containers/profile/sidebar/SidebarTagsSection';
+import QueriesTab from '@app/entity/shared/tabs/Dataset/Queries/QueriesTab';
+import { SchemaTab } from '@app/entity/shared/tabs/Dataset/Schema/SchemaTab';
+import StatsTab from '@app/entity/shared/tabs/Dataset/Stats/StatsTab';
+import { DocumentationTab } from '@app/entity/shared/tabs/Documentation/DocumentationTab';
+import { LineageTab } from '@app/entity/shared/tabs/Lineage/LineageTab';
+import { PropertiesTab } from '@app/entity/shared/tabs/Properties/PropertiesTab';
+import { mocks } from '@src/Mocks';
+import TestPageContainer from '@utils/test-utils/TestPageContainer';
+
+import { GetDatasetQuery, useGetDatasetQuery, useUpdateDatasetMutation } from '@graphql/dataset.generated';
+import { EntityType } from '@types';
 
 describe('EntityProfile', () => {
     it('renders dataset page', async () => {
@@ -51,8 +49,8 @@ describe('EntityProfile', () => {
                                 display: {
                                     visible: (_, _1) => true,
                                     enabled: (_, dataset: GetDatasetQuery) =>
-                                        (dataset?.dataset?.upstreamLineage?.entities?.length || 0) > 0 ||
-                                        (dataset?.dataset?.downstreamLineage?.entities?.length || 0) > 0,
+                                        ((dataset?.dataset as any)?.upstreamLineage?.entities?.length || 0) > 0 ||
+                                        ((dataset?.dataset as any)?.downstreamLineage?.entities?.length || 0) > 0,
                                 },
                             },
                             {
@@ -136,8 +134,8 @@ describe('EntityProfile', () => {
                                 display: {
                                     visible: (_, _1) => true,
                                     enabled: (_, dataset: GetDatasetQuery) =>
-                                        (dataset?.dataset?.upstreamLineage?.entities?.length || 0) > 0 ||
-                                        (dataset?.dataset?.downstreamLineage?.entities?.length || 0) > 0,
+                                        ((dataset?.dataset as any)?.upstreamLineage?.entities?.length || 0) > 0 ||
+                                        ((dataset?.dataset as any)?.downstreamLineage?.entities?.length || 0) > 0,
                                 },
                             },
                             {
@@ -220,8 +218,8 @@ describe('EntityProfile', () => {
                                 display: {
                                     visible: (_, _1) => true,
                                     enabled: (_, dataset: GetDatasetQuery) =>
-                                        (dataset?.dataset?.upstreamLineage?.entities?.length || 0) > 0 ||
-                                        (dataset?.dataset?.downstreamLineage?.entities?.length || 0) > 0,
+                                        ((dataset?.dataset as any)?.upstreamLineage?.entities?.length || 0) > 0 ||
+                                        ((dataset?.dataset as any)?.downstreamLineage?.entities?.length || 0) > 0,
                                 },
                             },
                             {
@@ -314,12 +312,6 @@ describe('EntityProfile', () => {
                             {
                                 name: 'Lineage',
                                 component: LineageTab,
-                                display: {
-                                    visible: (_, _1) => true,
-                                    enabled: (_, dataset: GetDatasetQuery) =>
-                                        (dataset?.dataset?.upstreamLineage?.entities?.length || 0) > 0 ||
-                                        (dataset?.dataset?.downstreamLineage?.entities?.length || 0) > 0,
-                                },
                             },
                             {
                                 name: 'Queries',
@@ -401,8 +393,8 @@ describe('EntityProfile', () => {
                                 display: {
                                     visible: (_, _1) => true,
                                     enabled: (_, dataset: GetDatasetQuery) =>
-                                        (dataset?.dataset?.upstreamLineage?.entities?.length || 0) > 0 ||
-                                        (dataset?.dataset?.downstreamLineage?.entities?.length || 0) > 0,
+                                        ((dataset?.dataset as any)?.upstreamLineage?.entities?.length || 0) > 0 ||
+                                        ((dataset?.dataset as any)?.downstreamLineage?.entities?.length || 0) > 0,
                                 },
                             },
                             {

@@ -1,10 +1,11 @@
-import { useAggregateAcrossEntitiesQuery } from '../../../graphql/search.generated';
-import { EntityType } from '../../../types.generated';
-import { GLOSSARY_ENTITY_TYPES } from '../../entity/shared/constants';
-import { useEntityRegistry } from '../../useEntityRegistry';
-import { ENTITY_FILTER_NAME, ORIGIN_FILTER_NAME, PLATFORM_FILTER_NAME } from '../utils/constants';
-import { MAX_AGGREGATION_VALUES } from './constants';
-import { useSidebarFilters } from './useSidebarFilters';
+import { GLOSSARY_ENTITY_TYPES } from '@app/entity/shared/constants';
+import { MAX_AGGREGATION_VALUES } from '@app/search/sidebar/constants';
+import { useSidebarFilters } from '@app/search/sidebar/useSidebarFilters';
+import { ENTITY_FILTER_NAME, ORIGIN_FILTER_NAME, PLATFORM_FILTER_NAME } from '@app/search/utils/constants';
+import { useEntityRegistry } from '@app/useEntityRegistry';
+
+import { useAggregateAcrossEntitiesQuery } from '@graphql/search.generated';
+import { EntityType } from '@types';
 
 type Props = {
     facets: string[];
@@ -44,14 +45,18 @@ const useAggregationsQuery = ({ facets, excludeFilters = false, skip }: Props) =
     };
 
     // This approach of falling back to previousData is needed to avoid a full re-mount of the sidebar entities
-    const data = error ? null : newData ?? previousData;
+    const data = error ? null : (newData ?? previousData);
     const loaded = !!data || !!error;
 
     const entityAggregations = data?.aggregateAcrossEntities?.facets
         ?.find((facet) => facet.field === ENTITY_FILTER_NAME)
         ?.aggregations.filter((aggregation) => {
             const type = aggregation.value as EntityType;
-            return registry.getEntity(type).isBrowseEnabled() && !GLOSSARY_ENTITY_TYPES.includes(type);
+            return (
+                registry.getEntity(type).isBrowseEnabled() &&
+                !GLOSSARY_ENTITY_TYPES.includes(type) &&
+                EntityType.BusinessAttribute !== type
+            );
         })
         .sort((a, b) => {
             const nameA = registry.getCollectionName(a.value as EntityType);

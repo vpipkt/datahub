@@ -1,3 +1,5 @@
+import { Color } from '@src/alchemy-components/theme/config';
+
 export type Theme = {
     styles: {
         'primary-color'?: string;
@@ -18,6 +20,13 @@ export type Theme = {
         'homepage-background-lower-fade': string;
         'box-shadow': string;
         'box-shadow-hover': string;
+        'highlight-color': string;
+        'highlight-border-color': string;
+    };
+    colors?: {
+        primary?: Color;
+        glossaryPalette?: string[];
+        domainPalette?: string[];
     };
     assets: {
         logoUrl: string;
@@ -36,6 +45,7 @@ export type Theme = {
                 label: string;
                 path: string;
                 shouldOpenInNewTab: boolean;
+                description?: string;
             }[];
         };
     };

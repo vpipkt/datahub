@@ -2,7 +2,7 @@ import collections
 import dataclasses
 import logging
 from datetime import datetime
-from typing import Dict, Iterable, List
+from typing import Any, Dict, Iterable, List, Optional
 
 from dateutil import parser
 from pydantic.fields import Field
@@ -34,10 +34,11 @@ logger = logging.getLogger(__name__)
 clickhouse_datetime_format = "%Y-%m-%d %H:%M:%S"
 
 clickhouse_usage_sql_comment = """\
-SELECT user                                                                       AS usename
+SELECT user                                                                       AS username
      , query
-     , substring(full_table_name, 1, position(full_table_name, '.') - 1)          AS schema_
+     , substring(full_table_name, 1, position(full_table_name, '.') - 1)          AS database
      , substring(full_table_name, position(full_table_name, '.') + 1)             AS table
+     , full_table_name
      , arrayMap(x -> substr(x, length(full_table_name) + 2),
                 arrayFilter(x -> startsWith(x, full_table_name || '.'), columns)) AS columns
      , query_start_time                                                           AS starttime
@@ -59,9 +60,9 @@ AggregatedDataset = GenericAggregatedDataset[ClickHouseTableRef]
 
 
 class ClickHouseJoinedAccessEvent(BaseModel):
-    usename: str = None  # type:ignore
+    username: str = None  # type:ignore
     query: str = None  # type: ignore
-    schema_: str = None  # type:ignore
+    database: str = None  # type:ignore
     table: str = None  # type:ignore
     columns: List[str]
     starttime: datetime
@@ -73,15 +74,22 @@ class ClickHouseUsageConfig(ClickHouseConfig, BaseUsageConfig, EnvConfigMixin):
     options: dict = Field(default={}, description="")
     query_log_table: str = Field(default="system.query_log", exclude=True)
 
-    def get_sql_alchemy_url(self):
-        return super().get_sql_alchemy_url()
+    def get_sql_alchemy_url(
+        self,
+        uri_opts: Optional[Dict[str, Any]] = None,
+        current_db: Optional[str] = None,
+    ) -> str:
+        return super().get_sql_alchemy_url(uri_opts=uri_opts, current_db=current_db)
 
 
 @platform_name("ClickHouse")
 @config_class(ClickHouseUsageConfig)
 @support_status(SupportStatus.CERTIFIED)
-@capability(SourceCapability.DELETION_DETECTION, "Enabled via stateful ingestion")
+@capability(
+    SourceCapability.DELETION_DETECTION, "Enabled by default via stateful ingestion"
+)
 @capability(SourceCapability.DATA_PROFILING, "Optionally enabled via configuration")
+@capability(SourceCapability.USAGE_STATS, "Enabled by default to get usage stats")
 @dataclasses.dataclass
 class ClickHouseUsageSource(Source):
     """
@@ -115,7 +123,7 @@ class ClickHouseUsageSource(Source):
         access_events = self._get_clickhouse_history()
         # If the query results is empty, we don't want to proceed
         if not access_events:
-            return []
+            return
 
         joined_access_event = self._get_joined_access_event(access_events)
         aggregated_info = self._aggregate_access_events(joined_access_event)
@@ -143,20 +151,22 @@ class ClickHouseUsageSource(Source):
         results = engine.execute(query)
         events = []
         for row in results:
-            # minor type conversion
-            if hasattr(row, "_asdict"):
-                event_dict = row._asdict()
-            else:
-                event_dict = dict(row)
+            event_dict = row._asdict()
 
             # stripping extra spaces caused by above _asdict() conversion
             for k, v in event_dict.items():
                 if isinstance(v, str):
                     event_dict[k] = v.strip()
 
-            if not self.config.schema_pattern.allowed(
-                event_dict.get("schema_")
-            ) or not self.config.table_pattern.allowed(event_dict.get("table")):
+            if not self.config.database_pattern.allowed(
+                event_dict.get("database")
+            ) or not (
+                self.config.table_pattern.allowed(event_dict.get("full_table_name"))
+                or self.config.view_pattern.allowed(event_dict.get("full_table_name"))
+            ):
+                logger.debug(
+                    f"Dropping usage event for {event_dict.get('full_table_name')}"
+                )
                 continue
 
             if event_dict.get("starttime", None):
@@ -195,11 +205,11 @@ class ClickHouseUsageSource(Source):
                 event_dict.get("endtime")
             )
 
-            if not (event_dict.get("schema_", None) and event_dict.get("table", None)):
+            if not (event_dict.get("database", None) and event_dict.get("table", None)):
                 logging.info("An access event parameter(s) is missing. Skipping ....")
                 continue
 
-            if not event_dict.get("usename") or event_dict["usename"] == "":
+            if not event_dict.get("username") or event_dict["username"] == "":
                 logging.info("The username parameter is missing. Skipping ....")
                 continue
 
@@ -210,16 +220,16 @@ class ClickHouseUsageSource(Source):
     def _aggregate_access_events(
         self, events: List[ClickHouseJoinedAccessEvent]
     ) -> Dict[datetime, Dict[ClickHouseTableRef, AggregatedDataset]]:
-        datasets: Dict[
-            datetime, Dict[ClickHouseTableRef, AggregatedDataset]
-        ] = collections.defaultdict(dict)
+        datasets: Dict[datetime, Dict[ClickHouseTableRef, AggregatedDataset]] = (
+            collections.defaultdict(dict)
+        )
 
         for event in events:
             floored_ts = get_time_bucket(event.starttime, self.config.bucket_duration)
 
             resource = (
-                f'{self.config.platform_instance+"." if self.config.platform_instance else ""}'
-                f"{event.schema_}.{event.table}"
+                f"{self.config.platform_instance + '.' if self.config.platform_instance else ''}"
+                f"{event.database}.{event.table}"
             )
 
             agg_bucket = datasets[floored_ts].setdefault(
@@ -228,7 +238,7 @@ class ClickHouseUsageSource(Source):
             )
 
             # current limitation in user stats UI, we need to provide email to show users
-            user_email = f"{event.usename if event.usename else 'unknown'}"
+            user_email = f"{event.username if event.username else 'unknown'}"
             if "@" not in user_email:
                 user_email += f"@{self.config.email_domain}"
             logger.info(f"user_email: {user_email}")
@@ -248,6 +258,7 @@ class ClickHouseUsageSource(Source):
             self.config.top_n_queries,
             self.config.format_sql_queries,
             self.config.include_top_n_queries,
+            self.config.queries_character_limit,
         )
 
     def get_report(self) -> SourceReport:

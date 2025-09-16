@@ -1,14 +1,15 @@
-import React from 'react';
 import { Divider } from 'antd';
+import React from 'react';
 import styled from 'styled-components';
 
-import TagTermGroup from '../../../../../shared/tags/TagTermGroup';
-import { SidebarHeader } from './SidebarHeader';
-import { useEntityData, useMutationUrn, useRefetch } from '../../../EntityContext';
+import { useEntityData, useMutationUrn, useRefetch } from '@app/entity/shared/EntityContext';
+import { SidebarHeader } from '@app/entity/shared/containers/profile/sidebar/SidebarHeader';
+import { getNestedValue } from '@app/entity/shared/containers/profile/utils';
 import {
     ENTITY_PROFILE_GLOSSARY_TERMS_ID,
     ENTITY_PROFILE_TAGS_ID,
-} from '../../../../../onboarding/config/EntityProfileOnboardingConfig';
+} from '@app/onboarding/config/EntityProfileOnboardingConfig';
+import TagTermGroup from '@app/shared/tags/TagTermGroup';
 
 const StyledDivider = styled(Divider)`
     margin: 16px 0;
@@ -34,7 +35,11 @@ export const SidebarTagsSection = ({ properties, readOnly }: Props) => {
             <span id={ENTITY_PROFILE_TAGS_ID}>
                 <SidebarHeader title="Tags" />
                 <TagTermGroup
-                    editableTags={entityData?.globalTags}
+                    editableTags={
+                        properties?.customTagPath
+                            ? getNestedValue(entityData, properties?.customTagPath)
+                            : entityData?.globalTags
+                    }
                     canAddTag={canAddTag}
                     canRemove
                     showEmptyMessage
@@ -49,7 +54,11 @@ export const SidebarTagsSection = ({ properties, readOnly }: Props) => {
             <span id={ENTITY_PROFILE_GLOSSARY_TERMS_ID}>
                 <SidebarHeader title="Glossary Terms" />
                 <TagTermGroup
-                    editableGlossaryTerms={entityData?.glossaryTerms}
+                    editableGlossaryTerms={
+                        properties?.customTermPath
+                            ? getNestedValue(entityData, properties?.customTermPath)
+                            : entityData?.glossaryTerms
+                    }
                     canAddTerm={canAddTerm}
                     canRemove
                     showEmptyMessage

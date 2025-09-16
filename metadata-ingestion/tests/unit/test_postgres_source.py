@@ -21,9 +21,7 @@ def test_initial_database(create_engine_mock):
 
 @patch("datahub.ingestion.source.sql.postgres.create_engine")
 def test_get_inspectors_multiple_databases(create_engine_mock):
-    execute_mock = (
-        create_engine_mock.return_value.connect.return_value.__enter__.return_value.execute
-    )
+    execute_mock = create_engine_mock.return_value.connect.return_value.__enter__.return_value.execute
     execute_mock.return_value = [{"datname": "db1"}, {"datname": "db2"}]
 
     config = PostgresConfig.parse_obj({**_base_config(), "initial_database": "db0"})
@@ -37,9 +35,7 @@ def test_get_inspectors_multiple_databases(create_engine_mock):
 
 @patch("datahub.ingestion.source.sql.postgres.create_engine")
 def tests_get_inspectors_with_database_provided(create_engine_mock):
-    execute_mock = (
-        create_engine_mock.return_value.connect.return_value.__enter__.return_value.execute
-    )
+    execute_mock = create_engine_mock.return_value.connect.return_value.__enter__.return_value.execute
     execute_mock.return_value = [{"datname": "db1"}, {"datname": "db2"}]
 
     config = PostgresConfig.parse_obj({**_base_config(), "database": "custom_db"})
@@ -51,9 +47,7 @@ def tests_get_inspectors_with_database_provided(create_engine_mock):
 
 @patch("datahub.ingestion.source.sql.postgres.create_engine")
 def tests_get_inspectors_with_sqlalchemy_uri_provided(create_engine_mock):
-    execute_mock = (
-        create_engine_mock.return_value.connect.return_value.__enter__.return_value.execute
-    )
+    execute_mock = create_engine_mock.return_value.connect.return_value.__enter__.return_value.execute
     execute_mock.return_value = [{"datname": "db1"}, {"datname": "db2"}]
 
     config = PostgresConfig.parse_obj(
@@ -63,23 +57,6 @@ def tests_get_inspectors_with_sqlalchemy_uri_provided(create_engine_mock):
     _ = list(source.get_inspectors())
     assert create_engine_mock.call_count == 1
     assert create_engine_mock.call_args_list[0][0][0] == "custom_url"
-
-
-def test_database_alias_takes_precendence():
-    config = PostgresConfig.parse_obj(
-        {
-            **_base_config(),
-            "database_alias": "ops_database",
-            "database": "postgres",
-        }
-    )
-    mock_inspector = mock.MagicMock()
-    assert (
-        PostgresSource(config, PipelineContext(run_id="test")).get_identifier(
-            schema="superset", entity="logs", inspector=mock_inspector
-        )
-        == "ops_database.superset.logs"
-    )
 
 
 def test_database_in_identifier():

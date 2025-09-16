@@ -14,14 +14,28 @@
 // ***********************************************************
 
 // Import commands.js using ES2015 syntax:
-import './commands'
+import "./commands";
+
+// Import Testing Library commands
+import "@testing-library/cypress/add-commands";
+import "cypress-real-events/support";
 
 // Alternatively you can use CommonJS syntax:
 // require('./commands')
 
 // https://github.com/bahmutov/cypress-timestamps
-require('cypress-timestamps/support')({
-    terminal: true, // by default the terminal output is disabled
-    error: true,
-    commandLog: true,
+require("cypress-timestamps/support")({
+  terminal: true, // by default the terminal output is disabled
+  error: true,
+  commandLog: true,
+});
+
+// Add file name to test titles for better JUnit reporting
+beforeEach(function () {
+  if (this.currentTest) {
+    const testPath = this.currentTest.invocationDetails?.relativeFile;
+    if (testPath) {
+      this.currentTest.title = `${testPath}`;
+    }
+  }
 });

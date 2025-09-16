@@ -1,8 +1,30 @@
+query getQuery($urn: String!) {
+    entity(urn: $urn) {
+        urn
+        type
+        ... on QueryEntity {
+            ...query
+        }
+    }
+}
+
+fragment ActorWithDisplayName on CorpUser {
+    urn
+    type
+    ...entityDisplayNameFields
+    editableProperties {
+        pictureLink
+    }
+    editableInfo {
+        pictureLink
+    }
+}
+
 fragment query on QueryEntity {
     urn
     properties {
-        description
         name
+        description
         source
         statement {
             value
@@ -12,15 +34,33 @@ fragment query on QueryEntity {
             time
             actor
         }
+        createdOn {
+            time
+            actor {
+                ...ActorWithDisplayName
+            }
+        }
         lastModified {
             time
             actor
         }
+        origin {
+            ...searchResultFields
+        }
+    }
+    platform {
+        ...platformFields
     }
     subjects {
         dataset {
             urn
+            type
             name
+        }
+        schemaField {
+            urn
+            type
+            fieldPath
         }
     }
 }
@@ -50,4 +90,30 @@ mutation updateQuery($urn: String!, $input: UpdateQueryInput!) {
 
 mutation deleteQuery($urn: String!) {
     deleteQuery(urn: $urn)
+}
+
+query searchAcrossLineageForQueries($input: SearchAcrossLineageInput!) {
+    searchAcrossLineage(input: $input) {
+        start
+        count
+        total
+        searchResults {
+            entity {
+                urn
+                type
+                ...searchResultFieldsNoLineage
+            }
+            paths {
+                path {
+                    urn
+                    type
+                    ... on QueryEntity {
+                        ...query
+                    }
+                }
+            }
+            explored
+            ignoredAsHop
+        }
+    }
 }

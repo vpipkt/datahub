@@ -1,13 +1,22 @@
+import { Button, DatePicker, Form, Modal, message } from 'antd';
 import React from 'react';
-import { Button, DatePicker, Form, Input, message, Modal } from 'antd';
-import { useBatchUpdateDeprecationMutation } from '../../../../graphql/mutations.generated';
-import { handleBatchError } from '../utils';
+import styled from 'styled-components';
+
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+import { Editor } from '@app/entity/shared/tabs/Documentation/components/editor/Editor';
+import { handleBatchError } from '@app/entity/shared/utils';
+
+import { useBatchUpdateDeprecationMutation } from '@graphql/mutations.generated';
 
 type Props = {
     urns: string[];
     onClose: () => void;
     refetch?: () => void;
 };
+
+const StyledEditor = styled(Editor)`
+    border: 1px solid ${ANTD_GRAY[4.5]};
+`;
 
 export const UpdateDeprecationModal = ({ urns, onClose, refetch }: Props) => {
     const [batchUpdateDeprecation] = useBatchUpdateDeprecationMutation();
@@ -27,7 +36,7 @@ export const UpdateDeprecationModal = ({ urns, onClose, refetch }: Props) => {
                         resources: [...urns.map((urn) => ({ resourceUrn: urn }))],
                         deprecated: true,
                         note: formData.note,
-                        decommissionTime: formData.decommissionTime && formData.decommissionTime.unix(),
+                        decommissionTime: formData.decommissionTime && formData.decommissionTime.unix() * 1000,
                     },
                 },
             });
@@ -51,7 +60,7 @@ export const UpdateDeprecationModal = ({ urns, onClose, refetch }: Props) => {
     return (
         <Modal
             title="Add Deprecation Details"
-            visible
+            open
             onCancel={handleClose}
             keyboard
             footer={
@@ -64,10 +73,11 @@ export const UpdateDeprecationModal = ({ urns, onClose, refetch }: Props) => {
                     </Button>
                 </>
             }
+            width="40%"
         >
             <Form form={form} name="addDeprecationForm" onFinish={handleOk} layout="vertical">
-                <Form.Item name="note" label="Note" rules={[{ whitespace: true }, { min: 0, max: 100 }]}>
-                    <Input placeholder="Add Note" autoFocus />
+                <Form.Item name="note" label="Note" rules={[{ whitespace: true }]}>
+                    <StyledEditor />
                 </Form.Item>
                 <Form.Item name="decommissionTime" label="Decommission Date">
                     <DatePicker style={{ width: '100%' }} />

@@ -1,22 +1,28 @@
-import React, { useEffect, useState } from 'react';
-import { useHistory, useLocation } from 'react-router';
+import { debounce } from 'lodash';
 import * as QueryString from 'query-string';
+import React, { useEffect, useState } from 'react';
+import { Helmet } from 'react-helmet-async';
+import { useHistory, useLocation } from 'react-router';
 import { useTheme } from 'styled-components';
-import { SearchHeader } from './SearchHeader';
-import { useEntityRegistry } from '../useEntityRegistry';
-import { EntityType, FacetFilterInput } from '../../types.generated';
+
+import analytics, { EventType } from '@app/analytics';
+import { useUserContext } from '@app/context/useUserContext';
+import { HALF_SECOND_IN_MS } from '@app/entity/shared/tabs/Dataset/Queries/utils/constants';
+import { SearchHeader } from '@app/search/SearchHeader';
+import { useSelectedSortOption } from '@app/search/context/SearchContext';
+import { getAutoCompleteInputFromQuickFilter } from '@app/search/utils/filterUtils';
+import { navigateToSearchUrl } from '@app/search/utils/navigateToSearchUrl';
+import useFilters from '@app/search/utils/useFilters';
+import { useBrowserTitle } from '@app/shared/BrowserTabTitleContext';
+import { useEntityRegistry } from '@app/useEntityRegistry';
+import { PageRoutes } from '@conf/Global';
+import { useQuickFiltersContext } from '@providers/QuickFiltersContext';
+
 import {
     GetAutoCompleteMultipleResultsQuery,
     useGetAutoCompleteMultipleResultsLazyQuery,
-} from '../../graphql/search.generated';
-import { navigateToSearchUrl } from './utils/navigateToSearchUrl';
-import analytics, { EventType } from '../analytics';
-import useFilters from './utils/useFilters';
-import { PageRoutes } from '../../conf/Global';
-import { getAutoCompleteInputFromQuickFilter } from './utils/filterUtils';
-import { useQuickFiltersContext } from '../../providers/QuickFiltersContext';
-import { useUserContext } from '../context/useUserContext';
-import { useSelectedSortOption } from './context/SearchContext';
+} from '@graphql/search.generated';
+import { EntityType, FacetFilterInput } from '@types';
 
 const styles = {
     children: {
@@ -66,6 +72,32 @@ export const SearchablePage = ({ onSearch, onAutoComplete, children }: Props) =>
     const { user } = userContext;
     const viewUrn = userContext.localState?.selectedViewUrn;
 
+    const { title, updateTitle } = useBrowserTitle();
+
+    useEffect(() => {
+        // Update the title only if it's not already set and there is a valid pathname
+        if (!title && location.pathname) {
+            const formattedPath = location.pathname
+                .split('/')
+                .filter((word) => word !== '')
+                .map((rawWord) => {
+                    // ie. personal-notifications -> Personal Notifications
+                    const words = rawWord.split('-');
+                    return words.map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+                })
+                .join(' | ');
+
+            if (formattedPath) {
+                return updateTitle(formattedPath);
+            }
+        }
+
+        // Clean up the title when the component unmounts
+        return () => {
+            updateTitle('');
+        };
+    }, [location.pathname, title, updateTitle]);
+
     useEffect(() => {
         if (suggestionsData !== undefined) {
             setNewSuggestionData(suggestionsData);
@@ -93,7 +125,7 @@ export const SearchablePage = ({ onSearch, onAutoComplete, children }: Props) =>
         });
     };
 
-    const autoComplete = (query: string) => {
+    const autoComplete = debounce((query: string) => {
         if (query && query.trim() !== '') {
             getAutoCompleteResults({
                 variables: {
@@ -105,7 +137,7 @@ export const SearchablePage = ({ onSearch, onAutoComplete, children }: Props) =>
                 },
             });
         }
-    };
+    }, HALF_SECOND_IN_MS);
 
     // Load correct autocomplete results on initial page load.
     useEffect(() => {
@@ -138,6 +170,9 @@ export const SearchablePage = ({ onSearch, onAutoComplete, children }: Props) =>
                 authenticatedUserPictureLink={user?.editableProperties?.pictureLink}
                 entityRegistry={entityRegistry}
             />
+            <Helmet>
+                <title>{title}</title>
+            </Helmet>
             <div style={styles.children}>{children}</div>
         </>
     );

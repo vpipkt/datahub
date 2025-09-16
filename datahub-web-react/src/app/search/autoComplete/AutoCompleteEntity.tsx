@@ -1,15 +1,19 @@
 import { Typography } from 'antd';
 import React from 'react';
 import styled from 'styled-components/macro';
-import { Entity, EntityType } from '../../../types.generated';
-import { useEntityRegistry } from '../../useEntityRegistry';
-import { getAutoCompleteEntityText } from './utils';
-import ParentContainers from './ParentContainers';
-import { ANTD_GRAY_V2 } from '../../entity/shared/constants';
-import AutoCompleteEntityIcon from './AutoCompleteEntityIcon';
-import { SuggestionText } from './styledComponents';
-import AutoCompletePlatformNames from './AutoCompletePlatformNames';
-import { getPlatformName } from '../../entity/shared/utils';
+
+import { ANTD_GRAY_V2 } from '@app/entity/shared/constants';
+import { getPlatformName } from '@app/entity/shared/utils';
+import AutoCompleteEntityIcon from '@app/search/autoComplete/AutoCompleteEntityIcon';
+import AutoCompletePlatformNames from '@app/search/autoComplete/AutoCompletePlatformNames';
+import ParentContainers from '@app/search/autoComplete/ParentContainers';
+import { SuggestionText } from '@app/search/autoComplete/styledComponents';
+import { getAutoCompleteEntityText } from '@app/search/autoComplete/utils';
+import ParentEntities from '@app/search/filters/ParentEntities';
+import { getParentEntities } from '@app/search/filters/utils';
+import { useEntityRegistry } from '@app/useEntityRegistry';
+
+import { Entity, EntityType } from '@types';
 
 const AutoCompleteEntityWrapper = styled.div`
     display: flex;
@@ -20,6 +24,7 @@ const AutoCompleteEntityWrapper = styled.div`
 
 const IconsContainer = styled.div`
     display: flex;
+    gap: 4px;
 `;
 
 const ContentWrapper = styled.div`
@@ -63,8 +68,13 @@ export default function AutoCompleteEntity({ query, entity, siblings, hasParentT
     const displayName = entityRegistry.getDisplayName(entity.type, entity);
     const { matchedText, unmatchedText } = getAutoCompleteEntityText(displayName, query);
     const entities = siblings?.length ? siblings : [entity];
+    const platformsToShow =
+        /* Only show sibling platforms if there are > 0 explicitly included siblings */
+        siblings?.length
+            ? genericEntityProps?.siblingPlatforms
+            : (genericEntityProps?.platform && [genericEntityProps?.platform]) || undefined;
     const platforms =
-        genericEntityProps?.siblingPlatforms
+        platformsToShow
             ?.map(
                 (platform) =>
                     getPlatformName(entityRegistry.getGenericEntityProperties(EntityType.DataPlatform, platform)) || '',
@@ -75,11 +85,12 @@ export default function AutoCompleteEntity({ query, entity, siblings, hasParentT
     // Need to reverse parentContainers since it returns direct parent first.
     const orderedParentContainers = [...parentContainers].reverse();
     const subtype = genericEntityProps?.subTypes?.typeNames?.[0];
+    const parentEntities = getParentEntities(entity) || [];
 
     const showPlatforms = !!platforms.length;
     const showPlatformDivider = !!platforms.length && !!parentContainers.length;
     const showParentContainers = !!parentContainers.length;
-    const showHeader = showPlatforms || showParentContainers;
+    const showHeader = showPlatforms || showParentContainers || parentEntities.length > 0;
 
     return (
         <AutoCompleteEntityWrapper data-testid={`auto-complete-entity-name-${displayName}`}>
@@ -95,6 +106,7 @@ export default function AutoCompleteEntity({ query, entity, siblings, hasParentT
                             {showPlatforms && <AutoCompletePlatformNames platforms={platforms} />}
                             {showPlatformDivider && <Divider />}
                             {showParentContainers && <ParentContainers parentContainers={orderedParentContainers} />}
+                            <ParentEntities parentEntities={parentEntities} numVisible={3} />
                         </ItemHeader>
                     )}
                     <Typography.Text

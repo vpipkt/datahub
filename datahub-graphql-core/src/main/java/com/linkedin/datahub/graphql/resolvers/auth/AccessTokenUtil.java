@@ -5,19 +5,17 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.Optional;
 
-
-
 public class AccessTokenUtil {
 
-  /**
-   * Convert an {@link AccessTokenDuration} into its milliseconds equivalent.
-   */
+  /** Convert an {@link AccessTokenDuration} into its milliseconds equivalent. */
   public static Optional<Long> mapDurationToMs(final AccessTokenDuration duration) {
     switch (duration) {
       case ONE_HOUR:
         return Optional.of(Duration.of(1, ChronoUnit.HOURS).toMillis());
       case ONE_DAY:
         return Optional.of(Duration.of(1, ChronoUnit.DAYS).toMillis());
+      case ONE_WEEK:
+        return Optional.of(Duration.of(7, ChronoUnit.DAYS).toMillis());
       case ONE_MONTH:
         return Optional.of(Duration.of(30, ChronoUnit.DAYS).toMillis());
       case THREE_MONTHS:
@@ -29,9 +27,10 @@ public class AccessTokenUtil {
       case NO_EXPIRY:
         return Optional.empty();
       default:
-        throw new RuntimeException(String.format("Unrecognized access token duration %s provided", duration));
+        throw new RuntimeException(
+            String.format("Unrecognized access token duration %s provided", duration));
     }
   }
 
-  private AccessTokenUtil() { }
+  private AccessTokenUtil() {}
 }

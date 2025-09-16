@@ -153,7 +153,7 @@
     "name" : "UsageTimeRange",
     "namespace" : "com.linkedin.usage",
     "doc" : " The range of data buckets that should be returned ",
-    "symbols" : [ "HOUR", "DAY", "WEEK", "MONTH", "QUARTER", "YEAR", "ALL" ]
+    "symbols" : [ "HOUR", "DAY", "WEEK", "MONTH", "QUARTER", "HALF_YEAR", "YEAR", "ALL" ]
   }, "com.linkedin.usage.UserUsageCounts" ],
   "schema" : {
     "annotations" : {
@@ -164,6 +164,7 @@
     "path" : "/usageStats",
     "schema" : "com.linkedin.usage.UsageAggregation",
     "doc" : "Rest.li entry point: /usageStats\n\ngenerated from: com.linkedin.metadata.resources.usage.UsageStats",
+    "resourceClass" : "com.linkedin.metadata.resources.usage.UsageStats",
     "simple" : {
       "supports" : [ ],
       "actions" : [ {
@@ -171,12 +172,14 @@
           "deprecated" : { }
         },
         "name" : "batchIngest",
+        "javaMethodName" : "batchIngest",
         "parameters" : [ {
           "name" : "buckets",
           "type" : "{ \"type\" : \"array\", \"items\" : \"com.linkedin.usage.UsageAggregation\" }"
         } ]
       }, {
         "name" : "query",
+        "javaMethodName" : "query",
         "parameters" : [ {
           "name" : "resource",
           "type" : "string"
@@ -195,10 +198,15 @@
           "name" : "maxBuckets",
           "type" : "int",
           "optional" : true
+        }, {
+          "name" : "timeZone",
+          "type" : "string",
+          "optional" : true
         } ],
         "returns" : "com.linkedin.usage.UsageQueryResult"
       }, {
         "name" : "queryRange",
+        "javaMethodName" : "queryRange",
         "parameters" : [ {
           "name" : "resource",
           "type" : "string"
@@ -208,6 +216,14 @@
         }, {
           "name" : "rangeFromEnd",
           "type" : "com.linkedin.usage.UsageTimeRange"
+        }, {
+          "name" : "startTime",
+          "type" : "long",
+          "optional" : true
+        }, {
+          "name" : "timeZone",
+          "type" : "string",
+          "optional" : true
         } ],
         "returns" : "com.linkedin.usage.UsageQueryResult"
       } ],

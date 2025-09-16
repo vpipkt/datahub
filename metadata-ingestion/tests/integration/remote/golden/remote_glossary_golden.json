@@ -6,6 +6,9 @@
             "aspects": [
                 {
                     "com.linkedin.pegasus2avro.glossary.GlossaryNodeInfo": {
+                        "customProperties": {
+                            "is_confidential": "True"
+                        },
                         "definition": "A set of terms related to Data Classification",
                         "name": "Classification"
                     }
@@ -18,6 +21,7 @@
                                 "type": "DEVELOPER"
                             }
                         ],
+                        "ownerTypes": {},
                         "lastModified": {
                             "time": 0,
                             "actor": "urn:li:corpuser:unknown"
@@ -29,7 +33,8 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
@@ -54,7 +59,8 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
@@ -83,6 +89,7 @@
                                 "type": "DEVELOPER"
                             }
                         ],
+                        "ownerTypes": {},
                         "lastModified": {
                             "time": 0,
                             "actor": "urn:li:corpuser:unknown"
@@ -94,7 +101,8 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
@@ -119,7 +127,8 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
@@ -148,6 +157,7 @@
                                 "type": "DEVELOPER"
                             }
                         ],
+                        "ownerTypes": {},
                         "lastModified": {
                             "time": 0,
                             "actor": "urn:li:corpuser:unknown"
@@ -159,12 +169,13 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
     "entityType": "glossaryTerm",
-    "entityUrn": "urn:li:glossaryTerm:Classification.Highly Confidential",
+    "entityUrn": "urn:li:glossaryTerm:Classification.Highly-Confidential",
     "changeType": "UPSERT",
     "aspectName": "domains",
     "aspect": {
@@ -176,13 +187,14 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
     "proposedSnapshot": {
         "com.linkedin.pegasus2avro.metadata.snapshot.GlossaryTermSnapshot": {
-            "urn": "urn:li:glossaryTerm:Classification.Highly Confidential",
+            "urn": "urn:li:glossaryTerm:Classification.Highly-Confidential",
             "aspects": [
                 {
                     "com.linkedin.pegasus2avro.glossary.GlossaryTermInfo": {
@@ -205,6 +217,7 @@
                                 "type": "DEVELOPER"
                             }
                         ],
+                        "ownerTypes": {},
                         "lastModified": {
                             "time": 0,
                             "actor": "urn:li:corpuser:unknown"
@@ -216,16 +229,18 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
     "proposedSnapshot": {
         "com.linkedin.pegasus2avro.metadata.snapshot.GlossaryNodeSnapshot": {
-            "urn": "urn:li:glossaryNode:Personal Information",
+            "urn": "urn:li:glossaryNode:Personal-Information",
             "aspects": [
                 {
                     "com.linkedin.pegasus2avro.glossary.GlossaryNodeInfo": {
+                        "customProperties": {},
                         "definition": "All terms related to personal information",
                         "name": "Personal Information"
                     }
@@ -238,6 +253,7 @@
                                 "type": "DEVELOPER"
                             }
                         ],
+                        "ownerTypes": {},
                         "lastModified": {
                             "time": 0,
                             "actor": "urn:li:corpuser:unknown"
@@ -249,20 +265,21 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
     "proposedSnapshot": {
         "com.linkedin.pegasus2avro.metadata.snapshot.GlossaryTermSnapshot": {
-            "urn": "urn:li:glossaryTerm:Personal Information.Email",
+            "urn": "urn:li:glossaryTerm:Personal-Information.Email",
             "aspects": [
                 {
                     "com.linkedin.pegasus2avro.glossary.GlossaryTermInfo": {
                         "customProperties": {},
                         "name": "Email",
                         "definition": "An individual's email address",
-                        "parentNode": "urn:li:glossaryNode:Personal Information",
+                        "parentNode": "urn:li:glossaryNode:Personal-Information",
                         "termSource": "INTERNAL",
                         "sourceRef": "DataHub",
                         "sourceUrl": "https://github.com/datahub-project/datahub/"
@@ -283,6 +300,7 @@
                                 "type": "DEVELOPER"
                             }
                         ],
+                        "ownerTypes": {},
                         "lastModified": {
                             "time": 0,
                             "actor": "urn:li:corpuser:unknown"
@@ -294,20 +312,21 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
     "proposedSnapshot": {
         "com.linkedin.pegasus2avro.metadata.snapshot.GlossaryTermSnapshot": {
-            "urn": "urn:li:glossaryTerm:Personal Information.Address",
+            "urn": "urn:li:glossaryTerm:Personal-Information.Address",
             "aspects": [
                 {
                     "com.linkedin.pegasus2avro.glossary.GlossaryTermInfo": {
                         "customProperties": {},
                         "name": "Address",
                         "definition": "A physical address",
-                        "parentNode": "urn:li:glossaryNode:Personal Information",
+                        "parentNode": "urn:li:glossaryNode:Personal-Information",
                         "termSource": "INTERNAL",
                         "sourceRef": "DataHub",
                         "sourceUrl": "https://github.com/datahub-project/datahub/"
@@ -321,6 +340,7 @@
                                 "type": "DEVELOPER"
                             }
                         ],
+                        "ownerTypes": {},
                         "lastModified": {
                             "time": 0,
                             "actor": "urn:li:corpuser:unknown"
@@ -332,20 +352,21 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
     "proposedSnapshot": {
         "com.linkedin.pegasus2avro.metadata.snapshot.GlossaryTermSnapshot": {
-            "urn": "urn:li:glossaryTerm:Personal Information.Gender",
+            "urn": "urn:li:glossaryTerm:Personal-Information.Gender",
             "aspects": [
                 {
                     "com.linkedin.pegasus2avro.glossary.GlossaryTermInfo": {
                         "customProperties": {},
                         "name": "Gender",
                         "definition": "The gender identity of the individual",
-                        "parentNode": "urn:li:glossaryNode:Personal Information",
+                        "parentNode": "urn:li:glossaryNode:Personal-Information",
                         "termSource": "INTERNAL",
                         "sourceRef": "DataHub",
                         "sourceUrl": "https://github.com/datahub-project/datahub/"
@@ -366,6 +387,7 @@
                                 "type": "DEVELOPER"
                             }
                         ],
+                        "ownerTypes": {},
                         "lastModified": {
                             "time": 0,
                             "actor": "urn:li:corpuser:unknown"
@@ -377,16 +399,18 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
     "proposedSnapshot": {
         "com.linkedin.pegasus2avro.metadata.snapshot.GlossaryNodeSnapshot": {
-            "urn": "urn:li:glossaryNode:Clients And Accounts",
+            "urn": "urn:li:glossaryNode:Clients-And-Accounts",
             "aspects": [
                 {
                     "com.linkedin.pegasus2avro.glossary.GlossaryNodeInfo": {
+                        "customProperties": {},
                         "definition": "Provides basic concepts such as account, account holder, account provider, relationship manager that are commonly used by financial services providers to describe customers and to determine counterparty identities",
                         "name": "Clients And Accounts"
                     }
@@ -399,6 +423,7 @@
                                 "type": "DEVELOPER"
                             }
                         ],
+                        "ownerTypes": {},
                         "lastModified": {
                             "time": 0,
                             "actor": "urn:li:corpuser:unknown"
@@ -410,20 +435,21 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
     "proposedSnapshot": {
         "com.linkedin.pegasus2avro.metadata.snapshot.GlossaryTermSnapshot": {
-            "urn": "urn:li:glossaryTerm:Clients And Accounts.Account",
+            "urn": "urn:li:glossaryTerm:Clients-And-Accounts.Account",
             "aspects": [
                 {
                     "com.linkedin.pegasus2avro.glossary.GlossaryTermInfo": {
                         "customProperties": {},
                         "name": "Account",
                         "definition": "Container for records associated with a business arrangement for regular transactions and services",
-                        "parentNode": "urn:li:glossaryNode:Clients And Accounts",
+                        "parentNode": "urn:li:glossaryNode:Clients-And-Accounts",
                         "termSource": "EXTERNAL",
                         "sourceRef": "FIBO",
                         "sourceUrl": "https://spec.edmcouncil.org/fibo/ontology/FBC/ProductsAndServices/ClientsAndAccounts/Account"
@@ -432,10 +458,10 @@
                 {
                     "com.linkedin.pegasus2avro.glossary.GlossaryRelatedTerms": {
                         "isRelatedTerms": [
-                            "urn:li:glossaryTerm:Classification.Highly Confidential"
+                            "urn:li:glossaryTerm:Classification.Highly-Confidential"
                         ],
                         "hasRelatedTerms": [
-                            "urn:li:glossaryTerm:Clients And Accounts.Balance"
+                            "urn:li:glossaryTerm:Clients-And-Accounts.Balance"
                         ]
                     }
                 },
@@ -447,6 +473,7 @@
                                 "type": "DEVELOPER"
                             }
                         ],
+                        "ownerTypes": {},
                         "lastModified": {
                             "time": 0,
                             "actor": "urn:li:corpuser:unknown"
@@ -458,20 +485,21 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
     "proposedSnapshot": {
         "com.linkedin.pegasus2avro.metadata.snapshot.GlossaryTermSnapshot": {
-            "urn": "urn:li:glossaryTerm:Clients And Accounts.Balance",
+            "urn": "urn:li:glossaryTerm:Clients-And-Accounts.Balance",
             "aspects": [
                 {
                     "com.linkedin.pegasus2avro.glossary.GlossaryTermInfo": {
                         "customProperties": {},
                         "name": "Balance",
                         "definition": "Amount of money available or owed",
-                        "parentNode": "urn:li:glossaryNode:Clients And Accounts",
+                        "parentNode": "urn:li:glossaryNode:Clients-And-Accounts",
                         "termSource": "EXTERNAL",
                         "sourceRef": "FIBO",
                         "sourceUrl": "https://spec.edmcouncil.org/fibo/ontology/FBC/ProductsAndServices/ClientsAndAccounts/Balance"
@@ -485,6 +513,7 @@
                                 "type": "DEVELOPER"
                             }
                         ],
+                        "ownerTypes": {},
                         "lastModified": {
                             "time": 0,
                             "actor": "urn:li:corpuser:unknown"
@@ -496,7 +525,8 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
@@ -506,6 +536,7 @@
             "aspects": [
                 {
                     "com.linkedin.pegasus2avro.glossary.GlossaryNodeInfo": {
+                        "customProperties": {},
                         "definition": "Common Business KPIs",
                         "name": "KPIs"
                     }
@@ -518,6 +549,7 @@
                                 "type": "DEVELOPER"
                             }
                         ],
+                        "ownerTypes": {},
                         "lastModified": {
                             "time": 0,
                             "actor": "urn:li:corpuser:unknown"
@@ -529,13 +561,14 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
     "proposedSnapshot": {
         "com.linkedin.pegasus2avro.metadata.snapshot.GlossaryTermSnapshot": {
-            "urn": "urn:li:glossaryTerm:4faf1eed790370f65942f2998a7993d6",
+            "urn": "urn:li:glossaryTerm:KPIs.CSAT",
             "aspects": [
                 {
                     "com.linkedin.pegasus2avro.glossary.GlossaryTermInfo": {
@@ -556,6 +589,7 @@
                                 "type": "DEVELOPER"
                             }
                         ],
+                        "ownerTypes": {},
                         "lastModified": {
                             "time": 0,
                             "actor": "urn:li:corpuser:unknown"
@@ -567,7 +601,8 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
@@ -582,12 +617,13 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
     "entityType": "glossaryNode",
-    "entityUrn": "urn:li:glossaryNode:Clients And Accounts",
+    "entityUrn": "urn:li:glossaryNode:Clients-And-Accounts",
     "changeType": "UPSERT",
     "aspectName": "status",
     "aspect": {
@@ -597,7 +633,8 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
@@ -612,12 +649,13 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
     "entityType": "glossaryNode",
-    "entityUrn": "urn:li:glossaryNode:Personal Information",
+    "entityUrn": "urn:li:glossaryNode:Personal-Information",
     "changeType": "UPSERT",
     "aspectName": "status",
     "aspect": {
@@ -627,22 +665,8 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
-    }
-},
-{
-    "entityType": "glossaryTerm",
-    "entityUrn": "urn:li:glossaryTerm:4faf1eed790370f65942f2998a7993d6",
-    "changeType": "UPSERT",
-    "aspectName": "status",
-    "aspect": {
-        "json": {
-            "removed": false
-        }
-    },
-    "systemMetadata": {
-        "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
@@ -657,12 +681,13 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
     "entityType": "glossaryTerm",
-    "entityUrn": "urn:li:glossaryTerm:Classification.Highly Confidential",
+    "entityUrn": "urn:li:glossaryTerm:Classification.Highly-Confidential",
     "changeType": "UPSERT",
     "aspectName": "status",
     "aspect": {
@@ -672,7 +697,8 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
@@ -687,12 +713,13 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
     "entityType": "glossaryTerm",
-    "entityUrn": "urn:li:glossaryTerm:Clients And Accounts.Account",
+    "entityUrn": "urn:li:glossaryTerm:Clients-And-Accounts.Account",
     "changeType": "UPSERT",
     "aspectName": "status",
     "aspect": {
@@ -702,12 +729,13 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
     "entityType": "glossaryTerm",
-    "entityUrn": "urn:li:glossaryTerm:Clients And Accounts.Balance",
+    "entityUrn": "urn:li:glossaryTerm:Clients-And-Accounts.Balance",
     "changeType": "UPSERT",
     "aspectName": "status",
     "aspect": {
@@ -717,12 +745,13 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
     "entityType": "glossaryTerm",
-    "entityUrn": "urn:li:glossaryTerm:Personal Information.Address",
+    "entityUrn": "urn:li:glossaryTerm:KPIs.CSAT",
     "changeType": "UPSERT",
     "aspectName": "status",
     "aspect": {
@@ -732,12 +761,13 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
     "entityType": "glossaryTerm",
-    "entityUrn": "urn:li:glossaryTerm:Personal Information.Email",
+    "entityUrn": "urn:li:glossaryTerm:Personal-Information.Address",
     "changeType": "UPSERT",
     "aspectName": "status",
     "aspect": {
@@ -747,12 +777,13 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 },
 {
     "entityType": "glossaryTerm",
-    "entityUrn": "urn:li:glossaryTerm:Personal Information.Gender",
+    "entityUrn": "urn:li:glossaryTerm:Personal-Information.Email",
     "changeType": "UPSERT",
     "aspectName": "status",
     "aspect": {
@@ -762,7 +793,24 @@
     },
     "systemMetadata": {
         "lastObserved": 1629795600000,
-        "runId": "remote-4"
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
+    }
+},
+{
+    "entityType": "glossaryTerm",
+    "entityUrn": "urn:li:glossaryTerm:Personal-Information.Gender",
+    "changeType": "UPSERT",
+    "aspectName": "status",
+    "aspect": {
+        "json": {
+            "removed": false
+        }
+    },
+    "systemMetadata": {
+        "lastObserved": 1629795600000,
+        "runId": "remote-4",
+        "lastRunId": "no-run-id-provided"
     }
 }
 ]

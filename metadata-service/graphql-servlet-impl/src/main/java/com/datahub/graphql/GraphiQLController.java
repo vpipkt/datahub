@@ -1,5 +1,8 @@
 package com.datahub.graphql;
 
+import static java.nio.charset.StandardCharsets.*;
+
+import com.linkedin.datahub.graphql.concurrency.GraphQLConcurrencyUtils;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
@@ -13,9 +16,6 @@ import org.springframework.stereotype.Controller;
 import org.springframework.util.FileCopyUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.ResponseBody;
-
-import static java.nio.charset.StandardCharsets.*;
-
 
 @Slf4j
 @Controller
@@ -32,9 +32,10 @@ public class GraphiQLController {
     }
   }
 
-  @GetMapping(value = "/graphiql", produces = MediaType.TEXT_HTML_VALUE)
+  @GetMapping(value = "/api/graphiql", produces = MediaType.TEXT_HTML_VALUE + ";charset=UTF-8")
   @ResponseBody
   CompletableFuture<String> graphiQL() {
-    return CompletableFuture.supplyAsync(() -> this.graphiqlHtml);
+    return GraphQLConcurrencyUtils.supplyAsync(
+        () -> this.graphiqlHtml, this.getClass().getSimpleName(), "graphiQL");
   }
 }

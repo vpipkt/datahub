@@ -2,11 +2,13 @@ import { Tag } from 'antd';
 import React from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
-import { Domain, EntityType } from '../../../types.generated';
-import { IconStyleType } from '../../entity/Entity';
-import { HoverEntityTooltip } from '../../recommendations/renderer/component/HoverEntityTooltip';
-import { useEntityRegistry } from '../../useEntityRegistry';
-import { ANTD_GRAY } from '../../entity/shared/constants';
+
+import DomainIcon from '@app/domain/DomainIcon';
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+import { HoverEntityTooltip } from '@app/recommendations/renderer/component/HoverEntityTooltip';
+import { useEntityRegistry } from '@app/useEntityRegistry';
+
+import { Domain, EntityType } from '@types';
 
 const DomainLinkContainer = styled(Link)`
     display: inline-block;
@@ -39,7 +41,12 @@ function DomainContent({ domain, name, closable, onClose, tagStyle, fontSize }: 
     return (
         <StyledTag style={tagStyle} closable={closable} onClose={onClose} fontSize={fontSize}>
             <span style={{ paddingRight: '4px' }}>
-                {entityRegistry.getIcon(EntityType.Domain, fontSize || 10, IconStyleType.ACCENT, ANTD_GRAY[9])}
+                <DomainIcon
+                    style={{
+                        fontSize: 10,
+                        color: ANTD_GRAY[9],
+                    }}
+                />
             </span>
             {displayName}
         </StyledTag>

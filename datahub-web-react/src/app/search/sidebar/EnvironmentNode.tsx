@@ -1,20 +1,21 @@
+import { Typography } from 'antd';
 import React from 'react';
 import styled from 'styled-components';
-import { Typography } from 'antd';
-import { formatNumber } from '../../shared/formatNumber';
-import ExpandableNode from './ExpandableNode';
-import useAggregationsQuery from './useAggregationsQuery';
-import { PLATFORM_FILTER_NAME } from '../utils/constants';
-import PlatformNode from './PlatformNode';
-import SidebarLoadingError from './SidebarLoadingError';
-import useToggle from '../../shared/useToggle';
+
 import {
     BrowseProvider,
     useEntityAggregation,
     useEnvironmentAggregation,
     useIsEnvironmentSelected,
-} from './BrowseContext';
-import useSidebarAnalytics from './useSidebarAnalytics';
+} from '@app/search/sidebar/BrowseContext';
+import ExpandableNode from '@app/search/sidebar/ExpandableNode';
+import PlatformNode from '@app/search/sidebar/PlatformNode';
+import SidebarLoadingError from '@app/search/sidebar/SidebarLoadingError';
+import useAggregationsQuery from '@app/search/sidebar/useAggregationsQuery';
+import useSidebarAnalytics from '@app/search/sidebar/useSidebarAnalytics';
+import { PLATFORM_FILTER_NAME } from '@app/search/utils/constants';
+import { formatNumber } from '@app/shared/formatNumber';
+import useToggle from '@app/shared/useToggle';
 
 const Count = styled(Typography.Text)`
     font-size: 12px;
@@ -22,7 +23,11 @@ const Count = styled(Typography.Text)`
     padding-right: 8px;
 `;
 
-const EnvironmentNode = () => {
+interface EntityNodeProps {
+    sortBy: string;
+}
+
+const EnvironmentNode: React.FC<EntityNodeProps> = ({ sortBy }) => {
     const isSelected = useIsEnvironmentSelected();
     const entityAggregation = useEntityAggregation();
     const environmentAggregation = useEnvironmentAggregation();
@@ -72,7 +77,7 @@ const EnvironmentNode = () => {
                             environmentAggregation={environmentAggregation}
                             platformAggregation={platformAggregation}
                         >
-                            <PlatformNode />
+                            <PlatformNode sortBy={sortBy} />
                         </BrowseProvider>
                     ))}
                     {error && <SidebarLoadingError onClickRetry={retry} />}

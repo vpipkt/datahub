@@ -1,27 +1,29 @@
+import { LoadingOutlined } from '@ant-design/icons';
 import { Empty } from 'antd';
 import React, { useEffect, useMemo, useState } from 'react';
-import styled from 'styled-components';
-import { LoadingOutlined } from '@ant-design/icons';
 import { useLocation } from 'react-router';
-import { GetDatasetQuery } from '../../../../../../graphql/dataset.generated';
-import { useGetSchemaBlameQuery, useGetSchemaVersionListQuery } from '../../../../../../graphql/schemaBlame.generated';
-import SchemaEditableContext from '../../../../../shared/SchemaEditableContext';
-import SchemaHeader from '../../../../dataset/profile/schema/components/SchemaHeader';
-import SchemaRawView from '../../../../dataset/profile/schema/components/SchemaRawView';
-import { KEY_SCHEMA_PREFIX } from '../../../../dataset/profile/schema/utils/constants';
-import { groupByFieldPath } from '../../../../dataset/profile/schema/utils/utils';
-import { ANTD_GRAY } from '../../../constants';
-import { useBaseEntity } from '../../../EntityContext';
-import { SchemaFieldBlame, SemanticVersionStruct } from '../../../../../../types.generated';
-import SchemaTable from './SchemaTable';
-import useGetSemanticVersionFromUrlParams from './utils/useGetSemanticVersionFromUrlParams';
-import { useGetVersionedDatasetQuery } from '../../../../../../graphql/versionedDataset.generated';
-import { useEntityRegistry } from '../../../../../useEntityRegistry';
-import { filterSchemaRows } from './utils/filterSchemaRows';
-import getSchemaFilterFromQueryString from './utils/getSchemaFilterFromQueryString';
-import useUpdateSchemaFilterQueryString from './utils/updateSchemaFilterQueryString';
-import { useGetEntityWithSchema } from './useGetEntitySchema';
-import SchemaContext from './SchemaContext';
+import styled from 'styled-components';
+
+import SchemaHeader from '@app/entity/dataset/profile/schema/components/SchemaHeader';
+import SchemaRawView from '@app/entity/dataset/profile/schema/components/SchemaRawView';
+import { KEY_SCHEMA_PREFIX } from '@app/entity/dataset/profile/schema/utils/constants';
+import { groupByFieldPath } from '@app/entity/dataset/profile/schema/utils/utils';
+import { useBaseEntity } from '@app/entity/shared/EntityContext';
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+import SchemaContext from '@app/entity/shared/tabs/Dataset/Schema/SchemaContext';
+import SchemaTable from '@app/entity/shared/tabs/Dataset/Schema/SchemaTable';
+import { useGetEntityWithSchema } from '@app/entity/shared/tabs/Dataset/Schema/useGetEntitySchema';
+import { filterSchemaRows } from '@app/entity/shared/tabs/Dataset/Schema/utils/filterSchemaRows';
+import getSchemaFilterFromQueryString from '@app/entity/shared/tabs/Dataset/Schema/utils/getSchemaFilterFromQueryString';
+import useUpdateSchemaFilterQueryString from '@app/entity/shared/tabs/Dataset/Schema/utils/updateSchemaFilterQueryString';
+import useGetSemanticVersionFromUrlParams from '@app/entity/shared/tabs/Dataset/Schema/utils/useGetSemanticVersionFromUrlParams';
+import SchemaEditableContext from '@app/shared/SchemaEditableContext';
+import { useEntityRegistry } from '@app/useEntityRegistry';
+
+import { GetDatasetQuery } from '@graphql/dataset.generated';
+import { useGetSchemaBlameQuery, useGetSchemaVersionListQuery } from '@graphql/schemaBlame.generated';
+import { useGetVersionedDatasetQuery } from '@graphql/versionedDataset.generated';
+import { SchemaFieldBlame, SemanticVersionStruct } from '@types';
 
 const NoSchema = styled(Empty)`
     color: ${ANTD_GRAY[6]};
@@ -74,6 +76,17 @@ export const SchemaTab = ({ properties }: { properties?: any }) => {
             (schemaMetadata?.fields?.length || 0) > 0 &&
             schemaMetadata?.fields?.findIndex((field) => field.fieldPath.indexOf(KEY_SCHEMA_PREFIX) === -1) !== -1,
         [schemaMetadata],
+    );
+
+    const hasProperties = useMemo(
+        () =>
+            entityWithSchema?.schemaMetadata?.fields?.some(
+                (schemaField) =>
+                    !!schemaField.schemaFieldEntity?.structuredProperties?.properties?.filter(
+                        (prop) => prop.structuredProperty.exists,
+                    )?.length,
+            ),
+        [entityWithSchema],
     );
 
     const [showKeySchema, setShowKeySchema] = useState(false);
@@ -140,8 +153,15 @@ export const SchemaTab = ({ properties }: { properties?: any }) => {
         }
     }, [hasValueSchema, hasKeySchema, setShowKeySchema]);
 
+    const sortedFields = schemaMetadata?.fields?.slice().sort((a, b) => {
+        if (a.isPartitioningKey === b.isPartitioningKey) {
+            return 0;
+        }
+        return a.isPartitioningKey ? -1 : 1;
+    });
+
     const { filteredRows, expandedRowsFromFilter } = filterSchemaRows(
-        schemaMetadata?.fields,
+        sortedFields,
         editableSchemaMetadata,
         filterText,
         entityRegistry,
@@ -150,9 +170,6 @@ export const SchemaTab = ({ properties }: { properties?: any }) => {
     const rows = useMemo(() => {
         return groupByFieldPath(filteredRows, { showKeySchema });
     }, [showKeySchema, filteredRows]);
-
-    const lastUpdated = getSchemaBlameData?.getSchemaBlame?.version?.semanticVersionTimestamp;
-    const lastObserved = versionedDatasetData.data?.versionedDataset?.schema?.lastObserved;
 
     const schemaFieldBlameList: Array<SchemaFieldBlame> =
         (getSchemaBlameData?.getSchemaBlame?.schemaFieldBlameList as Array<SchemaFieldBlame>) || [];
@@ -167,8 +184,6 @@ export const SchemaTab = ({ properties }: { properties?: any }) => {
                 hasKeySchema={hasKeySchema}
                 showKeySchema={showKeySchema}
                 setShowKeySchema={setShowKeySchema}
-                lastObserved={lastObserved}
-                lastUpdated={lastUpdated}
                 selectedVersion={selectedVersion}
                 versionList={versionList}
                 showSchemaAuditView={showSchemaAuditView}
@@ -195,13 +210,13 @@ export const SchemaTab = ({ properties }: { properties?: any }) => {
                                 <SchemaTable
                                     schemaMetadata={schemaMetadata}
                                     rows={rows}
-                                    editMode={editMode}
                                     editableSchemaMetadata={editableSchemaMetadata}
                                     usageStats={usageStats}
                                     schemaFieldBlameList={schemaFieldBlameList}
                                     showSchemaAuditView={showSchemaAuditView}
                                     expandedRowsFromFilter={expandedRowsFromFilter as any}
                                     filterText={filterText as any}
+                                    hasProperties={hasProperties}
                                 />
                             </SchemaEditableContext.Provider>
                         </>

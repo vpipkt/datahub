@@ -81,7 +81,7 @@ def json_schema_to_schema_fields(schema):
 )
 def test_json_schema_to_events_with_nullable_fields(schema):
     fields = json_schema_to_schema_fields(schema)
-    assert 1 == len(fields)
+    assert len(fields) == 1
     assert fields[0].nullable
 
 
@@ -153,14 +153,19 @@ def test_json_schema_with_recursion():
         },
     }
     fields = list(JsonSchemaTranslator.get_fields_from_schema(schema))
+
     expected_field_paths = [
         {
             "path": "[version=2.0].[type=TreeNode].[type=integer].value",
             "type": NumberTypeClass,
         },
         {
-            "path": "[version=2.0].[type=TreeNode].[type=array].[type=TreeNode].children",
+            "path": "[version=2.0].[type=TreeNode].[type=array].children",
             "type": ArrayTypeClass,
+        },
+        {
+            "path": "[version=2.0].[type=TreeNode].[type=array].children.[type=TreeNode].TreeNode",
+            "type": RecordTypeClass,
         },
     ]
     assert_field_paths_match(fields, expected_field_paths)
@@ -372,8 +377,10 @@ def test_nested_arrays():
 
     fields = list(JsonSchemaTranslator.get_fields_from_schema(schema))
     expected_field_paths: List[str] = [
-        "[version=2.0].[type=NestedArray].[type=array].[type=array].[type=Foo].ar",
-        "[version=2.0].[type=NestedArray].[type=array].[type=array].[type=Foo].ar.[type=integer].a",
+        "[version=2.0].[type=NestedArray].[type=array].ar",
+        "[version=2.0].[type=NestedArray].[type=array].ar.[type=array].array",
+        "[version=2.0].[type=NestedArray].[type=array].ar.[type=array].array.[type=Foo].Foo",
+        "[version=2.0].[type=NestedArray].[type=array].ar.[type=array].array.[type=Foo].Foo.[type=integer].a",
     ]
     assert_field_paths_match(fields, expected_field_paths)
     assert isinstance(fields[0].type.type, ArrayTypeClass)
@@ -496,14 +503,17 @@ def test_needs_disambiguation_nested_union_of_records_with_same_field_name():
         },
     }
     fields = list(JsonSchemaTranslator.get_fields_from_schema(schema))
+
     expected_field_paths: List[str] = [
         "[version=2.0].[type=ABFooUnion].[type=union].a",
         "[version=2.0].[type=ABFooUnion].[type=union].[type=A].a",
         "[version=2.0].[type=ABFooUnion].[type=union].[type=A].a.[type=string].f",
         "[version=2.0].[type=ABFooUnion].[type=union].[type=B].a",
         "[version=2.0].[type=ABFooUnion].[type=union].[type=B].a.[type=string].f",
-        "[version=2.0].[type=ABFooUnion].[type=union].[type=array].[type=array].[type=Foo].a",
-        "[version=2.0].[type=ABFooUnion].[type=union].[type=array].[type=array].[type=Foo].a.[type=integer].f",
+        "[version=2.0].[type=ABFooUnion].[type=union].[type=array].a",
+        "[version=2.0].[type=ABFooUnion].[type=union].[type=array].a.[type=array].array",
+        "[version=2.0].[type=ABFooUnion].[type=union].[type=array].a.[type=array].array.[type=Foo].Foo",
+        "[version=2.0].[type=ABFooUnion].[type=union].[type=array].a.[type=array].array.[type=Foo].Foo.[type=integer].f",
     ]
     assert_field_paths_match(fields, expected_field_paths)
 
@@ -578,8 +588,10 @@ def test_key_schema_handling():
         "[version=2.0].[key=True].[type=ABFooUnion].[type=union].[type=A].a.[type=string].f",
         "[version=2.0].[key=True].[type=ABFooUnion].[type=union].[type=B].a",
         "[version=2.0].[key=True].[type=ABFooUnion].[type=union].[type=B].a.[type=string].f",
-        "[version=2.0].[key=True].[type=ABFooUnion].[type=union].[type=array].[type=array].[type=Foo].a",
-        "[version=2.0].[key=True].[type=ABFooUnion].[type=union].[type=array].[type=array].[type=Foo].a.[type=number].f",
+        "[version=2.0].[key=True].[type=ABFooUnion].[type=union].[type=array].a",
+        "[version=2.0].[key=True].[type=ABFooUnion].[type=union].[type=array].a.[type=array].array",
+        "[version=2.0].[key=True].[type=ABFooUnion].[type=union].[type=array].a.[type=array].array.[type=Foo].Foo",
+        "[version=2.0].[key=True].[type=ABFooUnion].[type=union].[type=array].a.[type=array].array.[type=Foo].Foo.[type=number].f",
     ]
     assert_field_paths_match(fields, expected_field_paths)
     for f in fields:
@@ -664,7 +676,8 @@ def test_simple_array():
 
     fields = list(JsonSchemaTranslator.get_fields_from_schema(schema))
     expected_field_paths: List[str] = [
-        "[version=2.0].[type=ObjectWithArray].[type=array].[type=string].ar",
+        "[version=2.0].[type=ObjectWithArray].[type=array].ar",
+        "[version=2.0].[type=ObjectWithArray].[type=array].ar.[type=string].string",
     ]
     assert_field_paths_match(fields, expected_field_paths)
     assert isinstance(fields[0].type.type, ArrayTypeClass)
@@ -723,6 +736,19 @@ def test_non_str_enums():
     expected_field_paths: List[str] = ["[version=2.0].[type=object].[type=enum].bar"]
     assert_field_paths_match(fields, expected_field_paths)
     assert fields[0].description == 'One of: "baz", 1, null'
+
+
+def test_const_description_pulled_correctly():
+    schema = {
+        "$id": "test",
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {"bar": {"type": "string", "const": "not_defined"}},
+    }
+
+    fields = list(JsonSchemaTranslator.get_fields_from_schema(schema))
+    expected_field_paths: List[str] = ["[version=2.0].[type=object].[type=string].bar"]
+    assert_field_paths_match(fields, expected_field_paths)
+    assert fields[0].description == "Const value: not_defined"
 
 
 def test_anyof_with_properties():
@@ -833,3 +859,72 @@ def test_top_level_trival_allof():
     assert json.loads(fields[1].jsonProps or "{}")["required"] is False
     assert json.loads(fields[2].jsonProps or "{}")["required"] is True
     assert json.loads(fields[3].jsonProps or "{}")["required"] is False
+
+
+def test_description_extraction():
+    schema = {
+        "$id": "test",
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "properties": {
+            "bar": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": "XYZ",
+            }
+        },
+    }
+    fields = list(JsonSchemaTranslator.get_fields_from_schema(schema))
+    expected_field_paths: List[str] = [
+        "[version=2.0].[type=object].[type=array].bar",
+        "[version=2.0].[type=object].[type=array].bar.[type=string].string",
+    ]
+    assert_field_paths_match(fields, expected_field_paths)
+    assert_fields_are_valid(fields)
+    # Additional check for the description extraction
+    array_field = next(
+        field
+        for field in fields
+        if field.fieldPath == "[version=2.0].[type=object].[type=array].bar"
+    )
+    assert array_field.description == "XYZ"
+
+
+def test_json_schema_ref_loop_in_definitions():
+    """
+    Test for issue #14358: JSON Schema Ingestion Fails on $ref Loop in Definitions
+
+    This tests the specific case where a schema has a $ref loop within the definitions
+    section, which was reported to cause infinite loops during ingestion.
+    """
+    schema = {
+        "$schema": "http://json-schema.org/draft-07/schema#",
+        "$id": "https://schema.com/schema/1.0",
+        "type": "object",
+        "properties": {"test": {"$ref": "#/definitions/condition"}},
+        "required": ["test"],
+        "definitions": {
+            "condition": {
+                "type": "object",
+                "properties": {"condition": {"$ref": "#/definitions/condition"}},
+            }
+        },
+    }
+
+    # This should not hang or cause infinite loops
+    fields = json_schema_to_schema_fields(schema)
+
+    expected_field_paths = [
+        "[version=2.0].[type=object].[type=condition].test",
+        "[version=2.0].[type=object].[type=condition].test.[type=condition].condition",
+    ]
+    assert_field_paths_match(fields, expected_field_paths)
+    assert_fields_are_valid(fields)
+
+    # The second field should be marked as recursive
+    assert len(fields) == 2
+    assert not fields[0].recursive
+    assert fields[1].recursive
+
+    # Both should be RecordType
+    assert isinstance(fields[0].type.type, RecordTypeClass)
+    assert isinstance(fields[1].type.type, RecordTypeClass)

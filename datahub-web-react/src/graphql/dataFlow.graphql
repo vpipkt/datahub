@@ -19,6 +19,9 @@ fragment dataFlowFields on DataFlow {
             value
         }
     }
+    privileges {
+        ...entityPrivileges
+    }
     editableProperties {
         description
     }
@@ -47,8 +50,20 @@ fragment dataFlowFields on DataFlow {
     dataPlatformInstance {
         ...dataPlatformInstanceFields
     }
+    parentContainers {
+        ...parentContainersFields
+    }
     browsePathV2 {
         ...browsePathV2Fields
+    }
+    health {
+        ...entityHealth
+    }
+    activeIncidents: incidents(start: 0, count: 1, state: ACTIVE) {
+        total
+    }
+    subTypes {
+        typeNames
     }
 }
 
@@ -61,7 +76,25 @@ query getDataFlow($urn: String!) {
         downstream: lineage(input: { direction: DOWNSTREAM, start: 0, count: 100 }) {
             ...partialLineageResults
         }
-        childJobs: relationships(input: { types: ["IsPartOf"], direction: INCOMING, start: 0, count: 100 }) {
+        autoRenderAspects: aspects(input: { autoRenderOnly: true }) {
+            ...autoRenderAspectFields
+        }
+        structuredProperties {
+            properties {
+                ...structuredPropertiesFields
+            }
+        }
+        forms {
+            ...formsFields
+        }
+        ...notes
+    }
+}
+
+query getDataFlowChildJobs($urn: String!, $start: Int, $count: Int) {
+    dataFlow(urn: $urn) {
+        ...dataFlowFields
+        childJobs: relationships(input: { types: ["IsPartOf"], direction: INCOMING, start: $start, count: $count }) {
             start
             count
             total
@@ -97,6 +130,48 @@ query getDataFlow($urn: String!) {
                         }
                         deprecation {
                             ...deprecationFields
+                        }
+                        subTypes {
+                            typeNames
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+query getDataFlowDag(
+    $urn: String!
+    $start: Int
+    $count: Int
+    $separateSiblings: Boolean
+    $startTimeMillis: Long
+    $endTimeMillis: Long
+    $includeGhostEntities: Boolean = false
+) {
+    dataFlow(urn: $urn) {
+        childJobs: relationships(input: { types: ["IsPartOf"], direction: INCOMING, start: $start, count: $count }) {
+            start
+            count
+            total
+            relationships {
+                entity {
+                    urn
+                    type
+                    ... on EntityWithRelationships {
+                        upstream: lineage(
+                            input: {
+                                direction: UPSTREAM
+                                start: 0
+                                count: 1000
+                                separateSiblings: $separateSiblings
+                                startTimeMillis: $startTimeMillis
+                                endTimeMillis: $endTimeMillis
+                                includeGhostEntities: $includeGhostEntities
+                            }
+                        ) {
+                            ...lineageV2Result
                         }
                     }
                 }

@@ -1,9 +1,20 @@
-import { ListDomainsDocument, ListDomainsQuery } from '../../graphql/domain.generated';
+import { ApolloClient } from '@apollo/client';
+import { isEqual } from 'lodash';
+import { useEffect } from 'react';
+
+import { useDomainsContext } from '@app/domain/DomainsContext';
+import EntityRegistry from '@app/entity/EntityRegistry';
+import { GenericEntityProperties } from '@app/entity/shared/types';
+import usePrevious from '@app/shared/usePrevious';
+import { useEntityRegistry } from '@app/useEntityRegistry';
+
+import { ListDomainsDocument, ListDomainsQuery } from '@graphql/domain.generated';
+import { Entity, EntityType } from '@types';
 
 /**
  * Add an entry to the list domains cache.
  */
-export const addToListDomainsCache = (client, newDomain, pageSize) => {
+export const addToListDomainsCache = (client, newDomain, pageSize, parentDomain?: string) => {
     // Read the data from our cache for this query.
     const currData: ListDomainsQuery | null = client.readQuery({
         query: ListDomainsDocument,
@@ -11,6 +22,7 @@ export const addToListDomainsCache = (client, newDomain, pageSize) => {
             input: {
                 start: 0,
                 count: pageSize,
+                parentDomain,
             },
         },
     });
@@ -25,6 +37,7 @@ export const addToListDomainsCache = (client, newDomain, pageSize) => {
             input: {
                 start: 0,
                 count: pageSize,
+                parentDomain,
             },
         },
         data: {
@@ -38,10 +51,43 @@ export const addToListDomainsCache = (client, newDomain, pageSize) => {
     });
 };
 
+export const updateListDomainsCache = (
+    client: ApolloClient<any>,
+    urn: string,
+    id: string | undefined,
+    name: string,
+    description: string | undefined,
+    parentDomain?: string,
+) => {
+    addToListDomainsCache(
+        client,
+        {
+            __typename: 'Domain',
+            urn,
+            id: id || null,
+            type: EntityType.Domain,
+            properties: {
+                name,
+                description: description || null,
+            },
+            ownership: null,
+            entities: null,
+            children: null,
+            dataProducts: null,
+            parentDomains: null,
+            displayProperties: null,
+            institutionalMemory: null,
+            applications: null,
+        },
+        1000,
+        parentDomain,
+    );
+};
+
 /**
  * Remove an entry from the list domains cache.
  */
-export const removeFromListDomainsCache = (client, urn, page, pageSize) => {
+export const removeFromListDomainsCache = (client, urn, page, pageSize, parentDomain?: string) => {
     // Read the data from our cache for this query.
     const currData: ListDomainsQuery | null = client.readQuery({
         query: ListDomainsDocument,
@@ -49,6 +95,7 @@ export const removeFromListDomainsCache = (client, urn, page, pageSize) => {
             input: {
                 start: (page - 1) * pageSize,
                 count: pageSize,
+                parentDomain,
             },
         },
     });
@@ -63,6 +110,7 @@ export const removeFromListDomainsCache = (client, urn, page, pageSize) => {
             input: {
                 start: (page - 1) * pageSize,
                 count: pageSize,
+                parentDomain,
             },
         },
         data: {
@@ -75,3 +123,29 @@ export const removeFromListDomainsCache = (client, urn, page, pageSize) => {
         },
     });
 };
+
+export function useUpdateDomainEntityDataOnChange(entityData: GenericEntityProperties | null, entityType: EntityType) {
+    const { setEntityData } = useDomainsContext();
+    const previousEntityData = usePrevious(entityData);
+
+    useEffect(() => {
+        if (EntityType.Domain === entityType && !isEqual(entityData, previousEntityData)) {
+            setEntityData(entityData);
+        }
+    });
+}
+
+export function useSortedDomains<T extends Entity>(domains?: Array<T>, sortBy?: 'displayName') {
+    const entityRegistry = useEntityRegistry();
+    if (!domains || !sortBy) return domains;
+    return [...domains].sort((a, b) => {
+        const nameA = entityRegistry.getDisplayName(EntityType.Domain, a) || '';
+        const nameB = entityRegistry.getDisplayName(EntityType.Domain, b) || '';
+        return nameA.localeCompare(nameB);
+    });
+}
+
+export function getParentDomains<T extends Entity>(domain: T, entityRegistry: EntityRegistry) {
+    const props = entityRegistry.getGenericEntityProperties(EntityType.Domain, domain);
+    return props?.parentDomains?.domains ?? [];
+}

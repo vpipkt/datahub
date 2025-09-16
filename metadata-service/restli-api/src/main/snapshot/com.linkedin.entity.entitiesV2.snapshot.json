@@ -114,8 +114,19 @@
               }, {
                 "name" : "runId",
                 "type" : "string",
-                "doc" : "The run id that produced the metadata. Populated in case of batch-ingestion.",
+                "doc" : "The original run id that produced the metadata. Populated in case of batch-ingestion.",
                 "default" : "no-run-id-provided",
+                "optional" : true
+              }, {
+                "name" : "lastRunId",
+                "type" : "string",
+                "doc" : "The last run id that produced the metadata. Populated in case of batch-ingestion.",
+                "default" : "no-run-id-provided",
+                "optional" : true
+              }, {
+                "name" : "pipelineName",
+                "type" : "string",
+                "doc" : "The ingestion pipeline id that produced the metadata. Populated in case of batch ingestion.",
                 "optional" : true
               }, {
                 "name" : "registryName",
@@ -135,7 +146,25 @@
                 },
                 "doc" : "Additional properties",
                 "optional" : true
-              } ]
+              }, {
+                "name" : "version",
+                "type" : "string",
+                "doc" : "Aspect version\n   Initial implementation will use the aspect version's number, however stored as\n   a string in the case where a different aspect versioning scheme is later adopted.",
+                "optional" : true
+              }, {
+                "name" : "aspectCreated",
+                "type" : "com.linkedin.common.AuditStamp",
+                "doc" : "When the aspect was initially created and who created it, detected by version 0 -> 1 change",
+                "optional" : true
+              }, {
+                "name" : "aspectModified",
+                "type" : "com.linkedin.common.AuditStamp",
+                "doc" : "When the aspect was last modified and the actor that performed the modification",
+                "optional" : true
+              } ],
+              "Aspect" : {
+                "name" : "systemMetadata"
+              }
             },
             "doc" : "The system metadata for this aspect\n",
             "optional" : true
@@ -151,6 +180,7 @@
     "path" : "/entitiesV2",
     "schema" : "com.linkedin.entity.EntityResponse",
     "doc" : "Single unified resource for fetching, updating, searching, & browsing DataHub entities\n\ngenerated from: com.linkedin.metadata.resources.entity.EntityV2Resource",
+    "resourceClass" : "com.linkedin.metadata.resources.entity.EntityV2Resource",
     "collection" : {
       "identifier" : {
         "name" : "entitiesV2Id",
@@ -159,17 +189,27 @@
       "supports" : [ "batch_get", "get" ],
       "methods" : [ {
         "method" : "get",
+        "javaMethodName" : "get",
         "doc" : "Retrieves the value for an entity that is made up of latest versions of specified aspects.",
         "parameters" : [ {
           "name" : "aspects",
           "type" : "{ \"type\" : \"array\", \"items\" : \"string\" }",
           "optional" : true
+        }, {
+          "name" : "alwaysIncludeKeyAspect",
+          "type" : "boolean",
+          "optional" : true
         } ]
       }, {
         "method" : "batch_get",
+        "javaMethodName" : "batchGet",
         "parameters" : [ {
           "name" : "aspects",
           "type" : "{ \"type\" : \"array\", \"items\" : \"string\" }",
+          "optional" : true
+        }, {
+          "name" : "alwaysIncludeKeyAspect",
+          "type" : "boolean",
           "optional" : true
         } ]
       } ],

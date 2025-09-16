@@ -1,11 +1,14 @@
 import { Typography } from 'antd';
-import { ColumnsType, ColumnType } from 'antd/lib/table';
+import { ColumnType, ColumnsType } from 'antd/lib/table';
 import React, { useMemo } from 'react';
 import styled from 'styled-components';
-import { DatasetFieldProfile } from '../../../../../../../types.generated';
-import { StyledTable } from '../../../../components/styled/StyledTable';
-import { ANTD_GRAY } from '../../../../constants';
-import SampleValueTag from './SampleValueTag';
+
+import { StyledTable } from '@app/entity/shared/components/styled/StyledTable';
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+import SampleValueTag from '@app/entity/shared/tabs/Dataset/Stats/snapshot/SampleValueTag';
+import { downgradeV2FieldPath } from '@src/app/entity/dataset/profile/schema/utils/utils';
+
+import { DatasetFieldProfile } from '@types';
 
 type Props = {
     columnStats: Array<DatasetFieldProfile>;
@@ -13,7 +16,6 @@ type Props = {
 
 const StatSection = styled.div`
     padding: 20px 20px;
-    overflow: auto;
 `;
 
 const NameText = styled(Typography.Text)`
@@ -35,7 +37,7 @@ export default function ColumnStats({ columnStats }: Props) {
     const columnStatsTableData = useMemo(
         () =>
             columnStats.map((doc) => ({
-                name: doc.fieldPath,
+                name: downgradeV2FieldPath(doc.fieldPath),
                 min: doc.min,
                 max: doc.max,
                 mean: doc.mean,
@@ -162,7 +164,7 @@ export default function ColumnStats({ columnStats }: Props) {
     return (
         <StatSection>
             <Typography.Title level={5}>Column Stats</Typography.Title>
-            <StyledTable pagination={false} columns={columnStatsColumns} dataSource={columnStatsTableData} />
+            <StyledTable pagination={false} columns={columnStatsColumns} dataSource={columnStatsTableData} sticky />
         </StatSection>
     );
 }

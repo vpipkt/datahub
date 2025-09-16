@@ -1,18 +1,20 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { useHistory } from 'react-router';
 import { Select } from 'antd';
-import styled from 'styled-components';
+import React, { CSSProperties, useEffect, useRef, useState } from 'react';
 import { VscTriangleDown } from 'react-icons/vsc';
-import { useListMyViewsQuery, useListGlobalViewsQuery } from '../../../../graphql/view.generated';
-import { useUserContext } from '../../../context/useUserContext';
-import { DataHubView, DataHubViewType } from '../../../../types.generated';
-import { ViewBuilder } from '../builder/ViewBuilder';
-import { DEFAULT_LIST_VIEWS_PAGE_SIZE } from '../utils';
-import { PageRoutes } from '../../../../conf/Global';
-import { ViewBuilderMode } from '../builder/types';
-import { ViewSelectDropdown } from './ViewSelectDropdown';
-import { renderViewOptionGroup } from './renderViewOptionGroup';
-import { ANTD_GRAY_V2 } from '../../shared/constants';
+import { useHistory } from 'react-router';
+import styled from 'styled-components';
+
+import { useUserContext } from '@app/context/useUserContext';
+import { ANTD_GRAY_V2 } from '@app/entity/shared/constants';
+import { ViewBuilder } from '@app/entity/view/builder/ViewBuilder';
+import { ViewBuilderMode } from '@app/entity/view/builder/types';
+import { ViewSelectDropdown } from '@app/entity/view/select/ViewSelectDropdown';
+import { renderViewOptionGroup } from '@app/entity/view/select/renderViewOptionGroup';
+import { DEFAULT_LIST_VIEWS_PAGE_SIZE } from '@app/entity/view/utils';
+import { PageRoutes } from '@conf/Global';
+
+import { useListGlobalViewsQuery, useListMyViewsQuery } from '@graphql/view.generated';
+import { DataHubView, DataHubViewType } from '@types';
 
 type ViewBuilderDisplayState = {
     mode: ViewBuilderMode;
@@ -55,10 +57,20 @@ const ViewSelectContainer = styled.div`
             .ant-select-selection-item {
                 font-weight: 700;
                 font-size: 14px;
+                text-align: left;
             }
         }
     }
 `;
+
+const SelectStyled = styled(Select)`
+    min-width: 90px;
+    max-width: 200px;
+`;
+
+type Props = {
+    dropdownStyle?: CSSProperties;
+};
 
 /**
  * The View Select component allows you to select a View to apply to query on the current page. For example,
@@ -69,7 +81,7 @@ const ViewSelectContainer = styled.div`
  *
  * In the event that a user refreshes their browser, the state of the view should be saved as well.
  */
-export const ViewSelect = () => {
+export const ViewSelect = ({ dropdownStyle = {} }: Props) => {
     const history = useHistory();
     const userContext = useUserContext();
     const [isOpen, setIsOpen] = useState(false);
@@ -188,12 +200,11 @@ export const ViewSelect = () => {
 
     return (
         <ViewSelectContainer>
-            <Select
+            <SelectStyled
                 data-testid="view-select"
-                style={{ minWidth: '120px', maxWidth: '200px' }}
                 onChange={() => (selectRef?.current as any)?.blur()}
                 value={(foundSelectedUrn && selectedUrn) || undefined}
-                placeholder="All Entities"
+                placeholder="View all"
                 onSelect={onSelectView}
                 onClear={onClear}
                 ref={selectRef}
@@ -202,8 +213,8 @@ export const ViewSelect = () => {
                 dropdownMatchSelectWidth={false}
                 suffixIcon={<TriangleIcon isOpen={isOpen} />}
                 dropdownStyle={{
-                    position: 'fixed',
                     paddingBottom: 0,
+                    ...dropdownStyle,
                 }}
                 onDropdownVisibleChange={handleDropdownVisibleChange}
                 dropdownRender={(menu) => (
@@ -237,7 +248,7 @@ export const ViewSelect = () => {
                         onClickEditView,
                         onClickPreviewView,
                     })}
-            </Select>
+            </SelectStyled>
             {viewBuilderDisplayState.visible && (
                 <ViewBuilder
                     urn={viewBuilderDisplayState.view?.urn || undefined}

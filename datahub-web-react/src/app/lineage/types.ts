@@ -1,25 +1,30 @@
-import { FullLineageResultsFragment } from '../../graphql/lineage.generated';
+import { GenericEntityProperties } from '@app/entity/shared/types';
+
+import { FullLineageResultsFragment } from '@graphql/lineage.generated';
 import {
     Chart,
     Dashboard,
     DataJob,
+    DataPlatform,
     Dataset,
+    Entity,
     EntityType,
-    MlFeatureTable,
-    MlPrimaryKey,
+    FineGrainedLineage,
+    Health,
+    InputFields,
+    LineageRelationship,
+    Maybe,
     MlFeature,
+    MlFeatureTable,
     MlModel,
     MlModelGroup,
-    Maybe,
-    Status,
-    DataPlatform,
-    FineGrainedLineage,
+    MlPrimaryKey,
     SchemaMetadata,
-    InputFields,
-    Entity,
-    LineageRelationship,
+    ScrollResults,
     SiblingProperties,
-} from '../../types.generated';
+    Status,
+    StructuredProperties,
+} from '@types';
 
 export type EntitySelectParams = {
     type: EntityType;
@@ -40,6 +45,7 @@ export type FetchedEntity = {
     type: EntityType;
     subtype?: string;
     icon?: string;
+    siblingIcon?: string;
     // children?: Array<string>;
     upstreamChildren?: Array<EntityAndType>;
     upstreamRelationships?: Array<LineageRelationship>;
@@ -53,9 +59,14 @@ export type FetchedEntity = {
     siblingPlatforms?: Maybe<DataPlatform[]>;
     fineGrainedLineages?: FineGrainedLineage[];
     siblings?: Maybe<SiblingProperties>;
+    siblingsSearch?: Maybe<ScrollResults>;
     schemaMetadata?: SchemaMetadata;
     inputFields?: InputFields;
     canEditLineage?: boolean;
+    health?: Maybe<Health[]>;
+    structuredProperties?: Maybe<StructuredProperties>;
+    parents?: GenericEntityProperties[];
+    parent?: GenericEntityProperties;
 };
 
 export type NodeData = {
@@ -79,6 +90,9 @@ export type NodeData = {
     canEditLineage?: boolean;
     upstreamRelationships?: Array<LineageRelationship>;
     downstreamRelationships?: Array<LineageRelationship>;
+    health?: Maybe<Health[]>;
+    structuredProperties?: Maybe<StructuredProperties>;
+    siblingStructuredProperties?: Maybe<StructuredProperties>;
 };
 
 export type VizNode = {
@@ -108,7 +122,7 @@ export type ColumnEdge = {
     targetField: string;
 };
 
-export type FetchedEntities = { [x: string]: FetchedEntity };
+export type FetchedEntities = Map<string, FetchedEntity>;
 
 export enum Direction {
     Upstream = 'Upstream',
@@ -123,7 +137,7 @@ export type LineageExplorerParams = {
 export type TreeProps = {
     margin?: { top: number; right: number; bottom: number; left: number };
     entityAndType?: EntityAndType | null;
-    fetchedEntities: { [x: string]: FetchedEntity };
+    fetchedEntities: Map<string, FetchedEntity>;
     onEntityClick: (EntitySelectParams) => void;
     onEntityCenter: (EntitySelectParams) => void;
     onLineageExpand: (data: EntityAndType) => void;

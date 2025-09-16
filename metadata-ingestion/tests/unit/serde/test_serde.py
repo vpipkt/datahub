@@ -12,14 +12,19 @@ from freezegun import freeze_time
 import datahub.metadata.schema_classes as models
 from datahub.cli.json_file import check_mce_file
 from datahub.emitter import mce_builder
+from datahub.emitter.mcp import MetadataChangeProposalWrapper
 from datahub.emitter.serialization_helper import post_json_transform, pre_json_transform
 from datahub.ingestion.run.pipeline import Pipeline
-from datahub.ingestion.source.file import FileSourceConfig, GenericFileSource
+from datahub.ingestion.source.file import (
+    FileSourceConfig,
+    GenericFileSource,
+    read_metadata_file,
+)
 from datahub.metadata.schema_classes import MetadataChangeEventClass
 from datahub.metadata.schemas import getMetadataChangeEventSchema
-from tests.test_helpers import mce_helpers
+from datahub.testing import mce_helpers
+from datahub.testing.pytest_hooks import get_golden_settings
 from tests.test_helpers.click_helpers import run_datahub_cmd
-from tests.test_helpers.type_helpers import PytestConfig
 
 FROZEN_TIME = "2021-07-22 18:54:06"
 
@@ -41,7 +46,7 @@ FROZEN_TIME = "2021-07-22 18:54:06"
     ],
 )
 def test_serde_to_json(
-    pytestconfig: PytestConfig, tmp_path: pathlib.Path, json_filename: str
+    pytestconfig: pytest.Config, tmp_path: pathlib.Path, json_filename: str
 ) -> None:
     golden_file = pytestconfig.rootpath / json_filename
     output_file = tmp_path / "output.json"
@@ -73,15 +78,13 @@ def test_serde_to_json(
 )
 @freeze_time(FROZEN_TIME)
 def test_serde_to_avro(
-    pytestconfig: PytestConfig,
+    pytestconfig: pytest.Config,
     json_filename: str,
 ) -> None:
     # In this test, we want to read in from JSON -> MCE object.
     # Next we serialize from MCE to Avro and then deserialize back to MCE.
     # Finally, we want to compare the two MCE objects.
-    with patch(
-        "datahub.ingestion.api.common.PipelineContext", autospec=True
-    ) as mock_pipeline_context:
+    with patch("datahub.ingestion.api.common.PipelineContext") as mock_pipeline_context:
         json_path = pytestconfig.rootpath / json_filename
         source = GenericFileSource(
             ctx=mock_pipeline_context, config=FileSourceConfig(path=str(json_path))
@@ -100,7 +103,7 @@ def test_serde_to_avro(
         fo.seek(0)
         in_records = list(fastavro.reader(fo, return_record_name=True))
         in_mces = [
-            MetadataChangeEventClass.from_obj(record, tuples=True)
+            MetadataChangeEventClass.from_obj(record, tuples=True)  # type: ignore
             for record in in_records
         ]
 
@@ -115,7 +118,7 @@ def test_serde_to_avro(
     [
         # Normal test.
         "tests/unit/serde/test_serde_large.json",
-        # Check for backwards compatability with specifying all union types.
+        # Check for backwards compatibility with specifying all union types.
         "tests/unit/serde/test_serde_backwards_compat.json",
         # Usage stats.
         "tests/unit/serde/test_serde_usage.json",
@@ -128,14 +131,51 @@ def test_serde_to_avro(
     ],
 )
 @freeze_time(FROZEN_TIME)
-def test_check_metadata_schema(pytestconfig: PytestConfig, json_filename: str) -> None:
+def test_check_metadata_schema(pytestconfig: pytest.Config, json_filename: str) -> None:
     json_file_path = pytestconfig.rootpath / json_filename
 
     run_datahub_cmd(["check", "metadata-file", f"{json_file_path}"])
 
 
+def test_serde_paired(pytestconfig: pytest.Config) -> None:
+    # Test with a pair of python object + json file.
+    # Validates both deserialization and serialization.
+
+    python_metadata = [
+        MetadataChangeProposalWrapper(
+            entityUrn="urn:li:domain:marketing",
+            aspect=models.DomainPropertiesClass(
+                name="Marketing",
+                description="Description of the marketing domain",
+                parentDomain="urn:li:domain:gtm",
+            ),
+        )
+    ]
+    for metadata in python_metadata:
+        assert metadata.validate()
+
+    json_file_path = (
+        pytestconfig.rootpath / "tests/unit/serde/test_domain_properties.json"
+    )
+    if not get_golden_settings().update_golden:
+        json_metadata = list(read_metadata_file(json_file_path))
+        assert python_metadata == json_metadata
+
+    mce_helpers.check_goldens_stream(
+        outputs=python_metadata,
+        golden_path=json_file_path,
+        ignore_order=False,
+    )
+
+
+def test_unknown_object_deser_error(pytestconfig: pytest.Config) -> None:
+    json_file_path = pytestconfig.rootpath / "tests/unit/serde/test_invalid_object.json"
+    with pytest.raises(ValueError, match="Unknown object type"):
+        list(read_metadata_file(json_file_path))
+
+
 def test_check_metadata_rewrite(
-    pytestconfig: PytestConfig, tmp_path: pathlib.Path
+    pytestconfig: pytest.Config, tmp_path: pathlib.Path
 ) -> None:
     json_input = (
         pytestconfig.rootpath / "tests/unit/serde/test_canonicalization_input.json"
@@ -163,15 +203,12 @@ def test_check_metadata_rewrite(
     ],
 )
 def test_check_mce_schema_failure(
-    pytestconfig: PytestConfig, json_filename: str
+    pytestconfig: pytest.Config, json_filename: str
 ) -> None:
     json_file_path = pytestconfig.rootpath / json_filename
 
-    try:
+    with pytest.raises(Exception, match="is missing required field: active"):
         check_mce_file(str(json_file_path))
-        raise AssertionError("MCE File validated successfully when it should not have")
-    except Exception as e:
-        assert "is missing required field: active" in str(e)
 
 
 def test_field_discriminator() -> None:
@@ -238,7 +275,7 @@ def test_missing_optional_simple() -> None:
                 "criteria": [
                     {
                         "condition": "EQUALS",
-                        "field": "RESOURCE_TYPE",
+                        "field": "TYPE",
                         "values": ["notebook", "dataset", "dashboard"],
                     }
                 ]
@@ -252,7 +289,7 @@ def test_missing_optional_simple() -> None:
             "criteria": [
                 {
                     "condition": "EQUALS",
-                    "field": "RESOURCE_TYPE",
+                    "field": "TYPE",
                     "values": ["notebook", "dataset", "dashboard"],
                 }
             ]
@@ -267,13 +304,13 @@ def test_missing_optional_simple() -> None:
 def test_missing_optional_in_union() -> None:
     # This one doesn't contain any optional fields and should work fine.
     revised_json = json.loads(
-        '{"lastUpdatedTimestamp":1662356745807,"actors":{"groups":[],"resourceOwners":false,"allUsers":true,"allGroups":false,"users":[]},"privileges":["EDIT_ENTITY_ASSERTIONS","EDIT_DATASET_COL_GLOSSARY_TERMS","EDIT_DATASET_COL_TAGS","EDIT_DATASET_COL_DESCRIPTION"],"displayName":"customtest","resources":{"filter":{"criteria":[{"field":"RESOURCE_TYPE","condition":"EQUALS","values":["notebook","dataset","dashboard"]}]},"allResources":false},"description":"","state":"ACTIVE","type":"METADATA"}'
+        '{"lastUpdatedTimestamp":1662356745807,"actors":{"groups":[],"resourceOwners":false,"allUsers":true,"allGroups":false,"users":[]},"privileges":["EDIT_ENTITY_ASSERTIONS","EDIT_DATASET_COL_GLOSSARY_TERMS","EDIT_DATASET_COL_TAGS","EDIT_DATASET_COL_DESCRIPTION"],"displayName":"customtest","resources":{"filter":{"criteria":[{"field":"TYPE","condition":"EQUALS","values":["notebook","dataset","dashboard"]}]},"allResources":false},"description":"","state":"ACTIVE","type":"METADATA"}'
     )
     revised = models.DataHubPolicyInfoClass.from_obj(revised_json)
 
     # This one is missing the optional filters.allResources field.
     original_json = json.loads(
-        '{"privileges":["EDIT_ENTITY_ASSERTIONS","EDIT_DATASET_COL_GLOSSARY_TERMS","EDIT_DATASET_COL_TAGS","EDIT_DATASET_COL_DESCRIPTION"],"actors":{"resourceOwners":false,"groups":[],"allGroups":false,"allUsers":true,"users":[]},"lastUpdatedTimestamp":1662356745807,"displayName":"customtest","description":"","resources":{"filter":{"criteria":[{"field":"RESOURCE_TYPE","condition":"EQUALS","values":["notebook","dataset","dashboard"]}]}},"state":"ACTIVE","type":"METADATA"}'
+        '{"privileges":["EDIT_ENTITY_ASSERTIONS","EDIT_DATASET_COL_GLOSSARY_TERMS","EDIT_DATASET_COL_TAGS","EDIT_DATASET_COL_DESCRIPTION"],"actors":{"resourceOwners":false,"groups":[],"allGroups":false,"allUsers":true,"users":[]},"lastUpdatedTimestamp":1662356745807,"displayName":"customtest","description":"","resources":{"filter":{"criteria":[{"field":"TYPE","condition":"EQUALS","values":["notebook","dataset","dashboard"]}]}},"state":"ACTIVE","type":"METADATA"}'
     )
     original = models.DataHubPolicyInfoClass.from_obj(original_json)
 
@@ -359,7 +396,7 @@ def test_json_transforms(model, ref_server_obj):
     assert recovered == model
 
 
-def test_unions_with_aliases_assumptions():
+def test_unions_with_aliases_assumptions() -> None:
     # We have special handling for unions with aliases in our json serialization helpers.
     # Specifically, we assume that cost is the only instance of a union with alias.
     # This test validates that assumption.

@@ -1,11 +1,13 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import styled from 'styled-components';
-import { FacetFilterInput, FacetMetadata } from '../../../types.generated';
-import { ANTD_GRAY } from '../../entity/shared/constants';
-import { FilterMode, FilterModes, UnionType } from '../utils/constants';
-import AdvancedFilters from './AdvancedFilters';
-import BasicFilters from './BasicFilters';
-import { SEARCH_RESULTS_FILTERS_V2_INTRO } from '../../onboarding/config/SearchOnboardingConfig';
+
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+import { SEARCH_RESULTS_FILTERS_V2_INTRO } from '@app/onboarding/config/SearchOnboardingConfig';
+import AdvancedFilters from '@app/search/filters/AdvancedFilters';
+import BasicFilters from '@app/search/filters/BasicFilters';
+import { FilterMode, FilterModes, UnionType } from '@app/search/utils/constants';
+
+import { FacetFilterInput, FacetMetadata } from '@types';
 
 const SearchFiltersWrapper = styled.div<{ removePadding: boolean }>`
     border-bottom: 1px solid ${ANTD_GRAY[4]};
@@ -13,6 +15,7 @@ const SearchFiltersWrapper = styled.div<{ removePadding: boolean }>`
 `;
 
 interface Props {
+    loading: boolean;
     mode: FilterMode;
     availableFilters: FacetMetadata[];
     activeFilters: FacetFilterInput[];
@@ -24,6 +27,7 @@ interface Props {
 }
 
 export default function SearchFilters({
+    loading,
     mode,
     availableFilters,
     activeFilters,
@@ -33,6 +37,17 @@ export default function SearchFilters({
     onChangeUnionType,
     onChangeMode,
 }: Props) {
+    const [finalAvailableFilters, setFinalAvailableFilters] = useState(availableFilters);
+
+    /**
+     * Only update the active filters if we are done loading. Prevents jitter!
+     */
+    useEffect(() => {
+        if (!loading && finalAvailableFilters !== availableFilters) {
+            setFinalAvailableFilters(availableFilters);
+        }
+    }, [availableFilters, loading, finalAvailableFilters]);
+
     const isShowingBasicFilters = mode === FilterModes.BASIC;
     return (
         <SearchFiltersWrapper
@@ -42,7 +57,8 @@ export default function SearchFilters({
         >
             {isShowingBasicFilters && (
                 <BasicFilters
-                    availableFilters={availableFilters}
+                    loading={loading}
+                    availableFilters={finalAvailableFilters}
                     activeFilters={activeFilters}
                     onChangeFilters={onChangeFilters}
                     onClearFilters={onClearFilters}
@@ -51,7 +67,7 @@ export default function SearchFilters({
             )}
             {!isShowingBasicFilters && (
                 <AdvancedFilters
-                    availableFilters={availableFilters}
+                    availableFilters={finalAvailableFilters}
                     activeFilters={activeFilters}
                     unionType={unionType}
                     onChangeFilters={onChangeFilters}

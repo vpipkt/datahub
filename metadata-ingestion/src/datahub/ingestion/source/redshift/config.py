@@ -7,10 +7,17 @@ from pydantic.fields import Field
 
 from datahub.configuration import ConfigModel
 from datahub.configuration.common import AllowDenyPattern
-from datahub.configuration.pydantic_field_deprecation import pydantic_field_deprecated
 from datahub.configuration.source_common import DatasetLineageProviderConfigBase
+from datahub.configuration.validate_field_removal import pydantic_removed_field
+from datahub.configuration.validate_field_rename import pydantic_renamed_field
+from datahub.ingestion.api.incremental_lineage_helper import (
+    IncrementalLineageConfigMixin,
+)
+from datahub.ingestion.glossary.classification_mixin import (
+    ClassificationSourceConfigMixin,
+)
 from datahub.ingestion.source.data_lake_common.path_spec import PathSpec
-from datahub.ingestion.source.sql.postgres import BasePostgresConfig
+from datahub.ingestion.source.sql.sql_config import BasicSQLAlchemyConfig
 from datahub.ingestion.source.state.stateful_ingestion_base import (
     StatefulLineageConfigMixin,
     StatefulProfilingConfigMixin,
@@ -43,6 +50,11 @@ class S3LineageProviderConfig(ConfigModel):
         description="Strip filename from s3 url. It only applies if path_specs are not specified.",
     )
 
+    ignore_non_path_spec_path: bool = Field(
+        default=False,
+        description="Ignore paths that are not match in path_specs. It only applies if path_specs are specified.",
+    )
+
 
 class S3DatasetLineageProviderConfigBase(ConfigModel):
     """
@@ -64,12 +76,14 @@ class RedshiftUsageConfig(BaseUsageConfig, StatefulUsageConfigMixin):
 
 
 class RedshiftConfig(
-    BasePostgresConfig,
+    BasicSQLAlchemyConfig,
     DatasetLineageProviderConfigBase,
     S3DatasetLineageProviderConfigBase,
+    IncrementalLineageConfigMixin,
     RedshiftUsageConfig,
     StatefulLineageConfigMixin,
     StatefulProfilingConfigMixin,
+    ClassificationSourceConfigMixin,
 ):
     database: str = Field(default="dev", description="database")
 
@@ -81,15 +95,18 @@ class RedshiftConfig(
     # Because of this behavior, it uses dramatically fewer round trips for
     # large Redshift warehouses. As an example, see this query for the columns:
     # https://github.com/sqlalchemy-redshift/sqlalchemy-redshift/blob/60b4db04c1d26071c291aeea52f1dcb5dd8b0eb0/sqlalchemy_redshift/dialect.py#L745.
-    scheme = Field(
-        default="redshift+psycopg2",
+    scheme: str = Field(
+        default="redshift+redshift_connector",
         description="",
-        hidden_from_schema=True,
+        hidden_from_docs=True,
     )
 
-    _database_alias_deprecation = pydantic_field_deprecated(
-        "database_alias",
-        message="database_alias is deprecated. Use platform_instance instead.",
+    _database_alias_removed = pydantic_removed_field("database_alias")
+    _use_lineage_v2_removed = pydantic_removed_field("use_lineage_v2")
+    _rename_lineage_v2_generate_queries_to_lineage_generate_queries = (
+        pydantic_renamed_field(
+            "lineage_v2_generate_queries", "lineage_generate_queries"
+        )
     )
 
     default_schema: str = Field(
@@ -97,12 +114,26 @@ class RedshiftConfig(
         description="The default schema to use if the sql parser fails to parse the schema with `sql_based` lineage collector",
     )
 
-    include_table_lineage: Optional[bool] = Field(
+    is_serverless: bool = Field(
+        default=False,
+        description="Whether target Redshift instance is serverless (alternative is provisioned cluster)",
+    )
+
+    lineage_generate_queries: bool = Field(
+        default=True,
+        description="Whether to generate queries entities for the SQL-based lineage collector.",
+    )
+
+    include_table_lineage: bool = Field(
         default=True, description="Whether table lineage should be ingested."
     )
-    include_copy_lineage: Optional[bool] = Field(
+    include_copy_lineage: bool = Field(
         default=True,
         description="Whether lineage should be collected from copy commands",
+    )
+    include_share_lineage: bool = Field(
+        default=True,
+        description="Whether lineage should be collected from datashares",
     )
 
     include_usage_statistics: bool = Field(
@@ -110,19 +141,17 @@ class RedshiftConfig(
         description="Generate usage statistic. email_domain config parameter needs to be set if enabled",
     )
 
-    include_unload_lineage: Optional[bool] = Field(
+    include_unload_lineage: bool = Field(
         default=True,
         description="Whether lineage should be collected from unload commands",
     )
 
-    capture_lineage_query_parser_failures: Optional[bool] = Field(
-        hide_from_schema=True,
-        default=False,
-        description="Whether to capture lineage query parser errors with dataset properties for debugging",
+    include_table_rename_lineage: bool = Field(
+        default=True,
+        description="Whether we should follow `alter table ... rename to` statements when computing lineage. ",
     )
-
-    table_lineage_mode: Optional[LineageMode] = Field(
-        default=LineageMode.STL_SCAN_BASED,
+    table_lineage_mode: LineageMode = Field(
+        default=LineageMode.MIXED,
         description="Which table lineage collector mode to use. Available modes are: [stl_scan_based, sql_based, mixed]",
     )
     extra_client_options: Dict[str, Any] = {}
@@ -132,22 +161,41 @@ class RedshiftConfig(
         description="Whether `schema_pattern` is matched against fully qualified schema name `<database>.<schema>`.",
     )
 
+    extract_column_level_lineage: bool = Field(
+        default=True,
+        description="Whether to extract column level lineage. This config works with rest-sink only.",
+    )
+
+    # TODO - use DatasetPropertiesConfigMixin instead
+    patch_custom_properties: bool = Field(
+        default=True,
+        description="Whether to patch custom properties on existing datasets rather than replace.",
+    )
+
+    resolve_temp_table_in_lineage: bool = Field(
+        default=True,
+        description="Whether to resolve temp table appear in lineage to upstream permanent tables.",
+    )
+
+    skip_external_tables: bool = Field(
+        default=False,
+        description="Whether to skip EXTERNAL tables.",
+    )
+
     @root_validator(pre=True)
     def check_email_is_set_on_usage(cls, values):
         if values.get("include_usage_statistics"):
-            assert (
-                "email_domain" in values and values["email_domain"]
-            ), "email_domain needs to be set if usage is enabled"
+            assert "email_domain" in values and values["email_domain"], (
+                "email_domain needs to be set if usage is enabled"
+            )
         return values
 
-    @root_validator()
-    def check_database_or_database_alias_set(cls, values):
-        assert values.get("database") or values.get(
-            "database_alias"
-        ), "either database or database_alias must be set"
+    @root_validator(skip_on_failure=True)
+    def check_database_is_set(cls, values):
+        assert values.get("database"), "database must be set"
         return values
 
-    @root_validator(pre=False)
+    @root_validator(skip_on_failure=True)
     def backward_compatibility_configs_set(cls, values: Dict) -> Dict:
         match_fully_qualified_names = values.get("match_fully_qualified_names")
 
@@ -164,4 +212,25 @@ class RedshiftConfig(
                 "Current default `match_fully_qualified_names: False` is only to maintain backward compatibility. "
                 "The config option `match_fully_qualified_names` will be deprecated in future and the default behavior will assume `match_fully_qualified_names: True`."
             )
+        return values
+
+    @root_validator(skip_on_failure=True)
+    def connection_config_compatibility_set(cls, values: Dict) -> Dict:
+        if (
+            ("options" in values and "connect_args" in values["options"])
+            and "extra_client_options" in values
+            and len(values["extra_client_options"]) > 0
+        ):
+            raise ValueError(
+                "Cannot set both `connect_args` and `extra_client_options` in the config. Please use `extra_client_options` only."
+            )
+
+        if "options" in values and "connect_args" in values["options"]:
+            values["extra_client_options"] = values["options"]["connect_args"]
+
+        if values["extra_client_options"]:
+            if values["options"]:
+                values["options"]["connect_args"] = values["extra_client_options"]
+            else:
+                values["options"] = {"connect_args": values["extra_client_options"]}
         return values

@@ -1,14 +1,17 @@
 import styled from 'styled-components';
-import { MoreFilterOptionLabel } from '../../styledComponents';
+
+import { MoreFilterOptionLabel } from '@app/search/filters/styledComponents';
 
 export const SearchFilterWrapper = styled.div`
     padding: 0 25px 15px 25px;
+    display: flex;
+    align-items: center;
+    justify-content: left;
 `;
 
 export const Title = styled.div`
     align-items: center;
     font-weight: bold;
-    margin-bottom: 10px;
     display: flex;
     justify-content: left;
     cursor: pointer;

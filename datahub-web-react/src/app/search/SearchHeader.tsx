@@ -1,17 +1,17 @@
+import { Layout } from 'antd';
 import React, { useState } from 'react';
-import { Image, Layout } from 'antd';
-import { Link } from 'react-router-dom';
-import styled, { useTheme } from 'styled-components';
+import styled from 'styled-components';
 
-import { SearchBar } from './SearchBar';
-import { ManageAccount } from '../shared/ManageAccount';
-import { AutoCompleteResultForEntity, EntityType } from '../../types.generated';
-import EntityRegistry from '../entity/EntityRegistry';
-import { ANTD_GRAY } from '../entity/shared/constants';
-import { HeaderLinks } from '../shared/admin/HeaderLinks';
-import { useAppConfig, useIsShowAcrylInfoEnabled } from '../useAppConfig';
-import { DEFAULT_APP_CONFIG } from '../../appConfigContext';
-import DemoButton from '../entity/shared/components/styled/DemoButton';
+import EntityRegistry from '@app/entity/EntityRegistry';
+import DemoButton from '@app/entity/shared/components/styled/DemoButton';
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+import { SearchBar } from '@app/search/SearchBar';
+import AppLogoLink from '@app/shared/AppLogoLink';
+import { ManageAccount } from '@app/shared/ManageAccount';
+import { HeaderLinks } from '@app/shared/admin/HeaderLinks';
+import { useAppConfig, useIsShowAcrylInfoEnabled } from '@app/useAppConfig';
+
+import { AutoCompleteResultForEntity, EntityType } from '@types';
 
 const { Header } = Layout;
 
@@ -28,13 +28,6 @@ const styles = {
         borderBottom: `1px solid ${ANTD_GRAY[4.5]}`,
     },
 };
-
-const LogoImage = styled(Image)`
-    display: inline-block;
-    height: 32px;
-    width: auto;
-    margin-top: 2px;
-`;
 
 const LogoSearchContainer = styled.div`
     display: flex;
@@ -77,7 +70,6 @@ export const SearchHeader = ({
     entityRegistry,
 }: Props) => {
     const [isSearchBarFocused, setIsSearchBarFocused] = useState(false);
-    const themeConfig = useTheme();
     const showAcrylInfo = useIsShowAcrylInfoEnabled();
     const appConfig = useAppConfig();
     const viewsEnabled = appConfig.config?.viewsConfig?.enabled || false;
@@ -85,16 +77,7 @@ export const SearchHeader = ({
     return (
         <Header style={styles.header as any}>
             <LogoSearchContainer>
-                <Link to="/">
-                    <LogoImage
-                        src={
-                            appConfig.config !== DEFAULT_APP_CONFIG
-                                ? appConfig.config.visualConfig.logoUrl || themeConfig.assets.logoUrl
-                                : undefined
-                        }
-                        preview={false}
-                    />
-                </Link>
+                <AppLogoLink />
                 <SearchBar
                     initialQuery={initialQuery}
                     placeholderText={placeholderText}
@@ -107,6 +90,8 @@ export const SearchHeader = ({
                     combineSiblings
                     fixAutoComplete
                     showQuickFilters
+                    showViewAllResults
+                    showCommandK
                 />
             </LogoSearchContainer>
             <NavGroup>

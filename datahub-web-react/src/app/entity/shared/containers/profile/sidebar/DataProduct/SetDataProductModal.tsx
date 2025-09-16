@@ -1,15 +1,18 @@
-import Modal from 'antd/lib/modal/Modal';
 import { Button, Select, message } from 'antd';
+import Modal from 'antd/lib/modal/Modal';
 import React, { useRef, useState } from 'react';
 import styled from 'styled-components';
-import { useGetSearchResultsForMultipleQuery } from '../../../../../../../graphql/search.generated';
-import { DataProduct, EntityType } from '../../../../../../../types.generated';
-import { useEnterKeyListener } from '../../../../../../shared/useEnterKeyListener';
-import { useEntityRegistry } from '../../../../../../useEntityRegistry';
-import { IconStyleType } from '../../../../../Entity';
-import { tagRender } from '../tagRenderer';
-import { useBatchSetDataProductMutation } from '../../../../../../../graphql/dataProduct.generated';
-import { handleBatchError } from '../../../../utils';
+
+import { IconStyleType } from '@app/entity/Entity';
+import { tagRender } from '@app/entity/shared/containers/profile/sidebar/tagRenderer';
+import { handleBatchError } from '@app/entity/shared/utils';
+import { useEnterKeyListener } from '@app/shared/useEnterKeyListener';
+import { useEntityRegistry } from '@app/useEntityRegistry';
+import { getModalDomContainer } from '@utils/focus';
+
+import { useBatchSetDataProductMutation } from '@graphql/dataProduct.generated';
+import { useGetSearchResultsForMultipleQuery } from '@graphql/search.generated';
+import { DataProduct, EntityType } from '@types';
 
 const OptionWrapper = styled.div`
     padding: 2px 0;
@@ -126,6 +129,7 @@ export default function SetDataProductModal({
                     </Button>
                 </>
             }
+            getContainer={getModalDomContainer}
         >
             <Select
                 autoFocus
@@ -144,7 +148,7 @@ export default function SetDataProductModal({
                 tagRender={tagRender}
                 onBlur={() => setQuery('')}
             >
-                {data?.searchAcrossEntities?.searchResults.map((result) => (
+                {data?.searchAcrossEntities?.searchResults?.map((result) => (
                     <Select.Option value={result.entity.urn} key={result.entity.urn}>
                         <OptionWrapper>
                             {entityRegistry.getIcon(EntityType.DataProduct, 12, IconStyleType.ACCENT, 'black')}

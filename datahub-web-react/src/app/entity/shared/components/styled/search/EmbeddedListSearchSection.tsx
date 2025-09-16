@@ -1,19 +1,29 @@
-import React from 'react';
-import * as QueryString from 'query-string';
-import { useHistory, useLocation } from 'react-router';
 import { ApolloError } from '@apollo/client';
-import { FacetFilterInput } from '../../../../../../types.generated';
-import useFilters from '../../../../../search/utils/useFilters';
-import { navigateToEntitySearchUrl } from './navigateToEntitySearchUrl';
-import { FilterSet, GetSearchResultsParams, SearchResultsInterface } from './types';
-import { useEntityQueryParams } from '../../../containers/profile/utils';
-import { EmbeddedListSearch } from './EmbeddedListSearch';
-import { UnionType } from '../../../../../search/utils/constants';
+import * as QueryString from 'query-string';
+import React from 'react';
+import { useHistory, useLocation } from 'react-router';
+
+import { EmbeddedListSearch } from '@app/entity/shared/components/styled/search/EmbeddedListSearch';
+import { navigateToEntitySearchUrl } from '@app/entity/shared/components/styled/search/navigateToEntitySearchUrl';
+import {
+    FilterSet,
+    GetSearchResultsParams,
+    SearchResultsInterface,
+} from '@app/entity/shared/components/styled/search/types';
+import { useEntityQueryParams } from '@app/entity/shared/containers/profile/utils';
+import {
+    EXTRA_EMBEDDED_LIST_SEARCH_ENTITY_TYPES_TO_SUPPLEMENT_SEARCHABLE_ENTITY_TYPES,
+    UnionType,
+} from '@app/search/utils/constants';
 import {
     DownloadSearchResults,
     DownloadSearchResultsInput,
     DownloadSearchResultsParams,
-} from '../../../../../search/utils/types';
+} from '@app/search/utils/types';
+import useFilters from '@app/search/utils/useFilters';
+import { useEntityRegistry } from '@app/useEntityRegistry';
+
+import { FacetFilterInput } from '@types';
 
 const FILTER = 'filter';
 
@@ -52,6 +62,8 @@ type Props = {
     shouldRefetch?: boolean;
     resetShouldRefetch?: () => void;
     applyView?: boolean;
+    onLineageClick?: () => void;
+    isLineageTab?: boolean;
 };
 
 export const EmbeddedListSearchSection = ({
@@ -69,6 +81,8 @@ export const EmbeddedListSearchSection = ({
     shouldRefetch,
     resetShouldRefetch,
     applyView,
+    onLineageClick,
+    isLineageTab,
 }: Props) => {
     const history = useHistory();
     const location = useLocation();
@@ -80,6 +94,15 @@ export const EmbeddedListSearchSection = ({
     const query: string = params?.query as string;
     const page: number = params.page && Number(params.page as string) > 0 ? Number(params.page as string) : 1;
     const unionType: UnionType = Number(params.unionType as any as UnionType) || UnionType.AND;
+
+    const entityRegistry = useEntityRegistry();
+
+    const searchableEntityTypes = entityRegistry.getSearchEntityTypes();
+
+    const embeddedListSearchEntityTypes = [
+        ...searchableEntityTypes,
+        ...EXTRA_EMBEDDED_LIST_SEARCH_ENTITY_TYPES_TO_SUPPLEMENT_SEARCHABLE_ENTITY_TYPES,
+    ];
 
     const filters: Array<FacetFilterInput> = useFilters(params);
 
@@ -133,6 +156,7 @@ export const EmbeddedListSearchSection = ({
 
     return (
         <EmbeddedListSearch
+            entityTypes={embeddedListSearchEntityTypes}
             query={query || ''}
             page={page}
             unionType={unionType}
@@ -155,6 +179,8 @@ export const EmbeddedListSearchSection = ({
             shouldRefetch={shouldRefetch}
             resetShouldRefetch={resetShouldRefetch}
             applyView={applyView}
+            onLineageClick={onLineageClick}
+            isLineageTab={isLineageTab}
         />
     );
 };

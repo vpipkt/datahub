@@ -1,14 +1,12 @@
+import { Divider, Popover } from 'antd';
 import React from 'react';
 import styled from 'styled-components';
-import { Popover, Divider } from 'antd';
-import {
-    getHealthSummaryIcon,
-    getHealthSummaryMessage,
-    HealthSummaryIconType,
-} from '../../../../../shared/health/healthUtils';
-import { EntityHealthStatus } from './EntityHealthStatus';
-import { Health } from '../../../../../../types.generated';
-import { ANTD_GRAY } from '../../../constants';
+
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+import { EntityHealthStatus } from '@app/entity/shared/containers/profile/header/EntityHealthStatus';
+import { HealthSummaryIconType, getHealthSummaryIcon, getHealthSummaryMessage } from '@app/shared/health/healthUtils';
+
+import { Health } from '@types';
 
 const Header = styled.span`
     display: flex;
@@ -50,28 +48,29 @@ type Props = {
     health: Health[];
     baseUrl: string;
     children: React.ReactNode;
+    fontSize?: number;
+    placement?: any;
 };
 
-export const EntityHealthPopover = ({ health, baseUrl, children }: Props) => {
-    const icon = getHealthSummaryIcon(health, HealthSummaryIconType.OUTLINED);
-    const message = getHealthSummaryMessage(health);
+export const EntityHealthPopover = ({ health, baseUrl, children, fontSize, placement = 'right' }: Props) => {
     return (
         <Popover
             content={
                 <>
                     <Header>
-                        <Icon>{icon}</Icon> <Title>{message}</Title>
+                        <Icon>{getHealthSummaryIcon(health, HealthSummaryIconType.OUTLINED, fontSize)}</Icon>{' '}
+                        <Title>{getHealthSummaryMessage(health)}</Title>
                     </Header>
                     <StyledDivider />
                     {health.map((h) => (
-                        <StatusContainer>
+                        <StatusContainer key={h.type}>
                             <EntityHealthStatus type={h.type} message={h.message || undefined} baseUrl={baseUrl} />
                         </StatusContainer>
                     ))}
                 </>
             }
             color="#262626"
-            placement="right"
+            placement={placement}
             zIndex={10000000}
         >
             {children}

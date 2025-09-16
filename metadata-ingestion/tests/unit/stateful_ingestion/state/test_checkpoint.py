@@ -1,15 +1,16 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, List
 
 import pydantic
 import pytest
 
-from datahub.emitter.mce_builder import make_dataset_urn
 from datahub.ingestion.source.state.checkpoint import Checkpoint, CheckpointStateBase
 from datahub.ingestion.source.state.sql_common_state import (
     BaseSQLAlchemyCheckpointState,
 )
-from datahub.ingestion.source.state.usage_common_state import BaseUsageCheckpointState
+from datahub.ingestion.source.state.usage_common_state import (
+    BaseTimeWindowCheckpointState,
+)
 from datahub.metadata.schema_classes import (
     DatahubIngestionCheckpointClass,
     IngestionCheckpointStateClass,
@@ -27,7 +28,7 @@ def _assert_checkpoint_deserialization(
 ) -> Checkpoint:
     # Serialize a checkpoint aspect with the previous state.
     checkpoint_aspect = DatahubIngestionCheckpointClass(
-        timestampMillis=int(datetime.now().timestamp() * 1000),
+        timestampMillis=int(datetime.now(tz=timezone.utc).timestamp() * 1000),
         pipelineName=test_pipeline_name,
         platformInstanceId="this-can-be-anything-and-will-be-ignored",
         config="this-is-also-ignored",
@@ -57,18 +58,21 @@ def _assert_checkpoint_deserialization(
 
 
 def _make_sql_alchemy_checkpoint_state() -> BaseSQLAlchemyCheckpointState:
+    # Note that the urns here purposely use a lowercase env, even though it's
+    # technically incorrect. This is purely for backwards compatibility testing, but
+    # all existing code uses correctly formed envs.
     base_sql_alchemy_checkpoint_state_obj = BaseSQLAlchemyCheckpointState()
     base_sql_alchemy_checkpoint_state_obj.add_checkpoint_urn(
-        type="table", urn=make_dataset_urn("mysql", "db1.t1", "prod")
+        type="table", urn="urn:li:dataset:(urn:li:dataPlatform:mysql,db1.t1,prod)"
     )
     base_sql_alchemy_checkpoint_state_obj.add_checkpoint_urn(
-        type="view", urn=make_dataset_urn("mysql", "db1.v1", "prod")
+        type="view", urn="urn:li:dataset:(urn:li:dataPlatform:mysql,db1.v1,prod)"
     )
     return base_sql_alchemy_checkpoint_state_obj
 
 
-def _make_usage_checkpoint_state() -> BaseUsageCheckpointState:
-    base_usage_checkpoint_state_obj = BaseUsageCheckpointState(
+def _make_usage_checkpoint_state() -> BaseTimeWindowCheckpointState:
+    base_usage_checkpoint_state_obj = BaseTimeWindowCheckpointState(
         version="2.0", begin_timestamp_millis=1, end_timestamp_millis=100
     )
     return base_usage_checkpoint_state_obj
@@ -77,8 +81,8 @@ def _make_usage_checkpoint_state() -> BaseUsageCheckpointState:
 _checkpoint_aspect_test_cases: Dict[str, CheckpointStateBase] = {
     # An instance of BaseSQLAlchemyCheckpointState.
     "BaseSQLAlchemyCheckpointState": _make_sql_alchemy_checkpoint_state(),
-    # An instance of BaseUsageCheckpointState.
-    "BaseUsageCheckpointState": _make_usage_checkpoint_state(),
+    # An instance of BaseTimeWindowCheckpointState.
+    "BaseTimeWindowCheckpointState": _make_usage_checkpoint_state(),
 }
 
 
@@ -141,7 +145,7 @@ def test_supported_encodings():
     """
     Tests utf-8 and base85-bz2-json encodings
     """
-    test_state = BaseUsageCheckpointState(
+    test_state = BaseTimeWindowCheckpointState(
         version="1.0", begin_timestamp_millis=1, end_timestamp_millis=100
     )
 
@@ -154,19 +158,22 @@ def test_supported_encodings():
     test_serde_idempotence(test_state)
 
 
-def test_base85_upgrade_pickle_to_json():
-    """Verify that base85 (pickle) encoding is transitioned to base85-bz2-json."""
+def test_base85_is_removed():
+    """Verify that base85 encoding throws an error."""
 
     base85_payload = b"LRx4!F+o`-Q&~9zyaE6Km;c~@!8ry1Vd6kI1ULe}@BgM?1daeO0O_j`RP>&v5Eub8X^>>mqalb7C^byc8UsjrKmgDKAR1|q0#p(YC>k_rkk9}C0g>tf5XN6Ukbt0I-PV9G8w@zi7T+Sfbo$@HCtElKF-WJ9s~2<3(ryuxT}MN0DW*v>5|o${#bF{|bU_>|0pOAXZ$h9H+K5Hnfao<V0t4|A&l|ECl%3a~3snn}%ap>6Y<yIr$4eZIcxS2Ig`q(J&`QRF$0_OwQfa!>g3#ELVd4P5nvyX?j>N&ZHgqcR1Zc?#LWa^1m=n<!NpoAI5xrS(_*3yB*fiuZ44Funf%Sq?N|V|85WFwtbQE8kLB%FHC-}RPDZ+$-$Q9ra"
     checkpoint_state = IngestionCheckpointStateClass(
         formatVersion="1.0", serde="base85", payload=base85_payload
     )
 
-    checkpoint = _assert_checkpoint_deserialization(
-        checkpoint_state, _checkpoint_aspect_test_cases["BaseSQLAlchemyCheckpointState"]
-    )
-    assert checkpoint.state.serde == "base85-bz2-json"
-    assert len(checkpoint.state.to_bytes()) < len(base85_payload)
+    with pytest.raises(
+        ValueError,
+        match=r"base85 encoding.*removed",
+    ):
+        _assert_checkpoint_deserialization(
+            checkpoint_state,
+            _checkpoint_aspect_test_cases["BaseSQLAlchemyCheckpointState"],
+        )
 
 
 @pytest.mark.parametrize(

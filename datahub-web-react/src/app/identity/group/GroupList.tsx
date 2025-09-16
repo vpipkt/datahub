@@ -1,25 +1,39 @@
-import React, { useEffect, useState } from 'react';
-import { Button, Empty, List, Pagination } from 'antd';
-import styled from 'styled-components';
-import { useLocation } from 'react-router';
-import * as QueryString from 'query-string';
 import { UsergroupAddOutlined } from '@ant-design/icons';
-import { CorpGroup } from '../../../types.generated';
-import { Message } from '../../shared/Message';
-import { useListGroupsQuery } from '../../../graphql/group.generated';
-import GroupListItem from './GroupListItem';
-import TabToolbar from '../../entity/shared/components/styled/TabToolbar';
-import CreateGroupModal from './CreateGroupModal';
-import { SearchBar } from '../../search/SearchBar';
-import { useEntityRegistry } from '../../useEntityRegistry';
-import { scrollToTop } from '../../shared/searchUtils';
-import { GROUPS_CREATE_GROUP_ID, GROUPS_INTRO_ID } from '../../onboarding/config/GroupsOnboardingConfig';
-import { OnboardingTour } from '../../onboarding/OnboardingTour';
-import { addGroupToListGroupsCache, DEFAULT_GROUP_LIST_PAGE_SIZE, removeGroupFromListGroupsCache } from './cacheUtils';
+import { Button, Empty, List, Pagination } from 'antd';
+import * as QueryString from 'query-string';
+import React, { useEffect, useState } from 'react';
+import { useLocation } from 'react-router';
+import styled from 'styled-components';
 
-const GroupContainer = styled.div``;
+import TabToolbar from '@app/entity/shared/components/styled/TabToolbar';
+import CreateGroupModal from '@app/identity/group/CreateGroupModal';
+import GroupListItem from '@app/identity/group/GroupListItem';
+import {
+    DEFAULT_GROUP_LIST_PAGE_SIZE,
+    addGroupToListGroupsCache,
+    removeGroupFromListGroupsCache,
+} from '@app/identity/group/cacheUtils';
+import { OnboardingTour } from '@app/onboarding/OnboardingTour';
+import { GROUPS_CREATE_GROUP_ID, GROUPS_INTRO_ID } from '@app/onboarding/config/GroupsOnboardingConfig';
+import { SearchBar } from '@app/search/SearchBar';
+import { Message } from '@app/shared/Message';
+import { scrollToTop } from '@app/shared/searchUtils';
+import { useEntityRegistry } from '@app/useEntityRegistry';
+
+import { useListGroupsQuery } from '@graphql/group.generated';
+import { useListRolesQuery } from '@graphql/role.generated';
+import { CorpGroup, DataHubRole } from '@types';
+
+const GroupContainer = styled.div`
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+`;
 
 const GroupStyledList = styled(List)`
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
     &&& {
         width: 100%;
         border-color: ${(props) => props.theme.styles['border-color-base']};
@@ -46,7 +60,13 @@ export const GroupList = () => {
     const pageSize = DEFAULT_GROUP_LIST_PAGE_SIZE;
     const start = (page - 1) * pageSize;
 
-    const { loading, error, data, refetch, client } = useListGroupsQuery({
+    const {
+        loading,
+        error,
+        data,
+        refetch: groupRefetch,
+        client,
+    } = useListGroupsQuery({
         variables: {
             input: {
                 start,
@@ -68,6 +88,18 @@ export const GroupList = () => {
     const handleDelete = (urn: string) => {
         removeGroupFromListGroupsCache(urn, client, page, pageSize);
     };
+
+    const { data: rolesData } = useListRolesQuery({
+        fetchPolicy: 'cache-first',
+        variables: {
+            input: {
+                start: 0,
+                count: 10,
+            },
+        },
+    });
+
+    const selectRoleOptions = rolesData?.listRoles?.roles?.map((role) => role as DataHubRole) || [];
 
     return (
         <>
@@ -92,7 +124,10 @@ export const GroupList = () => {
                             fontSize: 12,
                         }}
                         onSearch={() => null}
-                        onQueryChange={(q) => setQuery(q)}
+                        onQueryChange={(q) => {
+                            setPage(1);
+                            setQuery(q);
+                        }}
                         entityRegistry={entityRegistry}
                         hideRecommendations
                     />
@@ -104,7 +139,12 @@ export const GroupList = () => {
                     }}
                     dataSource={groups}
                     renderItem={(item: any) => (
-                        <GroupListItem onDelete={() => handleDelete(item.urn)} group={item as CorpGroup} />
+                        <GroupListItem
+                            onDelete={() => handleDelete(item.urn)}
+                            group={item as CorpGroup}
+                            selectRoleOptions={selectRoleOptions}
+                            refetch={groupRefetch}
+                        />
                     )}
                 />
                 <GroupPaginationContainer>
@@ -121,9 +161,9 @@ export const GroupList = () => {
                 {isCreatingGroup && (
                     <CreateGroupModal
                         onClose={() => setIsCreatingGroup(false)}
-                        onCreate={(group) => {
+                        onCreate={(group: CorpGroup) => {
                             addGroupToListGroupsCache(group, client);
-                            setTimeout(() => refetch(), 3000);
+                            setTimeout(() => groupRefetch(), 3000);
                         }}
                     />
                 )}

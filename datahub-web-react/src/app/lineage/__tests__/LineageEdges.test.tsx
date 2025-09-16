@@ -1,12 +1,13 @@
 import { render } from '@testing-library/react';
 import React from 'react';
-import { dataset1, dataset4WithLineage } from '../../../Mocks';
-import { getTestEntityRegistry } from '../../../utils/test-utils/TestPageContainer';
-import LineageEdges from '../manage/LineageEdges';
-import { Direction } from '../types';
+
+import LineageEdges from '@app/lineage/manage/LineageEdges';
+import { Direction } from '@app/lineage/types';
+import { dataset1, dataset4WithLineage } from '@src/Mocks';
+import { getTestEntityRegistry } from '@utils/test-utils/TestPageContainer';
 
 const mockEntityRegistry = getTestEntityRegistry();
-jest.mock('../../useEntityRegistry', () => ({
+vi.mock('../../useEntityRegistry', () => ({
     useEntityRegistry: () => mockEntityRegistry,
 }));
 
@@ -18,8 +19,8 @@ describe('LineageEdges', () => {
                 lineageDirection={Direction.Upstream}
                 entitiesToAdd={[]}
                 entitiesToRemove={[]}
-                setEntitiesToAdd={jest.fn}
-                setEntitiesToRemove={jest.fn}
+                setEntitiesToAdd={vi.fn()}
+                setEntitiesToRemove={vi.fn()}
             />,
         );
 
@@ -34,8 +35,8 @@ describe('LineageEdges', () => {
                 lineageDirection={Direction.Upstream}
                 entitiesToAdd={[]}
                 entitiesToRemove={[]}
-                setEntitiesToAdd={jest.fn}
-                setEntitiesToRemove={jest.fn}
+                setEntitiesToAdd={vi.fn()}
+                setEntitiesToRemove={vi.fn()}
             />,
         );
 
@@ -54,8 +55,8 @@ describe('LineageEdges', () => {
                 lineageDirection={Direction.Downstream}
                 entitiesToAdd={[]}
                 entitiesToRemove={[]}
-                setEntitiesToAdd={jest.fn}
-                setEntitiesToRemove={jest.fn}
+                setEntitiesToAdd={vi.fn()}
+                setEntitiesToRemove={vi.fn()}
             />,
         );
 
@@ -63,7 +64,9 @@ describe('LineageEdges', () => {
 
         expect(queryByTestId('empty-lineage')).not.toBeInTheDocument();
         expect(entityItems).toHaveLength(1);
-        expect(getByText(dataset4WithLineage.downstream.relationships[0].entity.properties.name)).toBeInTheDocument();
+        expect(
+            getByText(dataset4WithLineage.downstream.relationships[0]!.entity!.properties!.name!),
+        ).toBeInTheDocument();
     });
 
     it('should remove entities from the displayed list if the urn is in entitiesToRemove', async () => {
@@ -73,8 +76,8 @@ describe('LineageEdges', () => {
                 lineageDirection={Direction.Upstream}
                 entitiesToAdd={[]}
                 entitiesToRemove={[dataset4WithLineage.upstream.relationships[1].entity]}
-                setEntitiesToAdd={jest.fn}
-                setEntitiesToRemove={jest.fn}
+                setEntitiesToAdd={vi.fn()}
+                setEntitiesToRemove={vi.fn()}
             />,
         );
 
@@ -95,8 +98,8 @@ describe('LineageEdges', () => {
                 lineageDirection={Direction.Upstream}
                 entitiesToAdd={[dataset1]}
                 entitiesToRemove={[]}
-                setEntitiesToAdd={jest.fn}
-                setEntitiesToRemove={jest.fn}
+                setEntitiesToAdd={vi.fn()}
+                setEntitiesToRemove={vi.fn()}
             />,
         );
 

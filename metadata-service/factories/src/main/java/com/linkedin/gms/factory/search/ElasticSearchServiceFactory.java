@@ -1,75 +1,108 @@
 package com.linkedin.gms.factory.search;
 
+import static com.linkedin.metadata.Constants.*;
+
+import com.linkedin.gms.factory.config.ConfigurationProvider;
 import com.linkedin.metadata.config.search.ElasticSearchConfiguration;
 import com.linkedin.metadata.config.search.SearchConfiguration;
 import com.linkedin.metadata.config.search.custom.CustomSearchConfiguration;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLMapper;
-import com.linkedin.gms.factory.config.ConfigurationProvider;
-import com.linkedin.gms.factory.entityregistry.EntityRegistryFactory;
-import com.linkedin.gms.factory.spring.YamlPropertySourceFactory;
 import com.linkedin.metadata.models.registry.EntityRegistry;
 import com.linkedin.metadata.search.elasticsearch.ElasticSearchService;
-import com.linkedin.metadata.search.elasticsearch.indexbuilder.EntityIndexBuilders;
 import com.linkedin.metadata.search.elasticsearch.indexbuilder.SettingsBuilder;
 import com.linkedin.metadata.search.elasticsearch.query.ESBrowseDAO;
 import com.linkedin.metadata.search.elasticsearch.query.ESSearchDAO;
+import com.linkedin.metadata.search.elasticsearch.query.filter.QueryFilterRewriteChain;
 import com.linkedin.metadata.search.elasticsearch.update.ESWriteDAO;
+import io.datahubproject.metadata.context.ObjectMapperContext;
+import java.io.IOException;
 import javax.annotation.Nonnull;
-
+import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.context.annotation.Import;
-import org.springframework.context.annotation.PropertySource;
-
-import java.io.IOException;
-
 
 @Slf4j
 @Configuration
-@PropertySource(value = "classpath:/application.yml", factory = YamlPropertySourceFactory.class)
-@Import({EntityRegistryFactory.class, SettingsBuilderFactory.class})
 public class ElasticSearchServiceFactory {
-  private static final ObjectMapper YAML_MAPPER = new YAMLMapper();
 
   @Autowired
   @Qualifier("baseElasticSearchComponents")
   private BaseElasticSearchComponentsFactory.BaseElasticSearchComponents components;
 
   @Autowired
-  @Qualifier("entityRegistry")
-  private EntityRegistry entityRegistry;
-
-  @Autowired
   @Qualifier("settingsBuilder")
   private SettingsBuilder settingsBuilder;
 
   @Autowired
-  private ConfigurationProvider configurationProvider;
+  @Qualifier("entityRegistry")
+  private EntityRegistry entityRegistry;
+
+  @Bean
+  protected ElasticSearchConfiguration elasticSearchConfiguration(
+      final ConfigurationProvider configurationProvider) {
+    log.info("Search configuration: {}", configurationProvider.getElasticSearch().getSearch());
+    return configurationProvider.getElasticSearch();
+  }
+
+  @Bean
+  @Nullable
+  protected CustomSearchConfiguration customSearchConfiguration(
+      final ElasticSearchConfiguration elasticSearchConfiguration) throws IOException {
+    SearchConfiguration searchConfiguration = elasticSearchConfiguration.getSearch();
+    return searchConfiguration.getCustom() == null
+        ? null
+        : searchConfiguration.getCustom().resolve(ObjectMapperContext.DEFAULT.getYamlMapper());
+  }
+
+  @Bean
+  protected ESSearchDAO esSearchDAO(
+      final ConfigurationProvider configurationProvider,
+      final QueryFilterRewriteChain queryFilterRewriteChain,
+      final ElasticSearchConfiguration elasticSearchConfiguration,
+      @Nullable final CustomSearchConfiguration customSearchConfiguration) {
+
+    return new ESSearchDAO(
+        components.getSearchClient(),
+        configurationProvider.getFeatureFlags().isPointInTimeCreationEnabled(),
+        elasticSearchConfiguration.getImplementation(),
+        elasticSearchConfiguration,
+        customSearchConfiguration,
+        queryFilterRewriteChain,
+        configurationProvider.getSearchService());
+  }
+
+  @Bean
+  protected ESWriteDAO esWriteDAO() {
+    return new ESWriteDAO(
+        components.getConfig(), components.getSearchClient(), components.getBulkProcessor());
+  }
 
   @Bean(name = "elasticSearchService")
   @Nonnull
-  protected ElasticSearchService getInstance(ConfigurationProvider configurationProvider) throws IOException {
-    log.info("Search configuration: {}", configurationProvider.getElasticSearch().getSearch());
+  protected ElasticSearchService getInstance(
+      final ConfigurationProvider configurationProvider,
+      final QueryFilterRewriteChain queryFilterRewriteChain,
+      final ElasticSearchConfiguration elasticSearchConfiguration,
+      @Nullable final CustomSearchConfiguration customSearchConfiguration,
+      final ESSearchDAO esSearchDAO,
+      final ESWriteDAO esWriteDAO)
+      throws IOException {
 
-    ElasticSearchConfiguration elasticSearchConfiguration = configurationProvider.getElasticSearch();
-    SearchConfiguration searchConfiguration = elasticSearchConfiguration.getSearch();
-    CustomSearchConfiguration customSearchConfiguration = searchConfiguration.getCustom() == null ? null
-            : searchConfiguration.getCustom().resolve(YAML_MAPPER);
-
-    ESSearchDAO esSearchDAO =
-        new ESSearchDAO(entityRegistry, components.getSearchClient(), components.getIndexConvention(),
-                configurationProvider.getFeatureFlags().isPointInTimeCreationEnabled(),
-                elasticSearchConfiguration.getImplementation(), searchConfiguration, customSearchConfiguration);
     return new ElasticSearchService(
-        new EntityIndexBuilders(components.getIndexBuilder(), entityRegistry, components.getIndexConvention(),
-            settingsBuilder), esSearchDAO,
-        new ESBrowseDAO(entityRegistry, components.getSearchClient(), components.getIndexConvention(),
-            searchConfiguration, customSearchConfiguration),
-        new ESWriteDAO(entityRegistry, components.getSearchClient(), components.getIndexConvention(),
-            components.getBulkProcessor(), components.getNumRetries()));
+        components.getIndexBuilder(),
+        entityRegistry,
+        components.getIndexConvention(),
+        settingsBuilder,
+        configurationProvider.getSearchService(),
+        esSearchDAO,
+        new ESBrowseDAO(
+            components.getSearchClient(),
+            elasticSearchConfiguration,
+            customSearchConfiguration,
+            queryFilterRewriteChain,
+            configurationProvider.getSearchService()),
+        esWriteDAO);
   }
 }

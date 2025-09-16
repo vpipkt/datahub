@@ -49,6 +49,9 @@ query getChart($urn: String!) {
         domain {
             ...entityDomain
         }
+        application {
+            ...entityApplication
+        }
         ...entityDataProduct
         deprecation {
             ...deprecationFields
@@ -97,9 +100,29 @@ query getChart($urn: String!) {
             ...inputFieldsFields
         }
         privileges {
-            canEditLineage
-            canEditEmbed
+            ...entityPrivileges
         }
+        subTypes {
+            typeNames
+        }
+        autoRenderAspects: aspects(input: { autoRenderOnly: true }) {
+            ...autoRenderAspectFields
+        }
+        structuredProperties {
+            properties {
+                ...structuredPropertiesFields
+            }
+        }
+        health {
+            ...entityHealth
+        }
+        activeIncidents: incidents(start: 0, count: 1, state: ACTIVE) {
+            total
+        }
+        forms {
+            ...formsFields
+        }
+        ...notes
     }
 }
 

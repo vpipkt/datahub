@@ -1,6 +1,6 @@
 import FeatureAvailability from '@site/src/components/FeatureAvailability';
 
-# About DataHub Sync Status
+# Sync Status
 
 <FeatureAvailability/>
 
@@ -42,5 +42,3 @@ You can hover over the sync status message in the UI to view the exact timestamp
 <p align="center">
   <img width="70%"  src="https://raw.githubusercontent.com/datahub-project/static-assets/master/imgs/sync-status-hover-card.png"/>
 </p>
-
-_Need more help? Join the conversation in [Slack](http://slack.datahubproject.io)!_

@@ -3,18 +3,20 @@ import { QueryHookOptions, QueryResult } from '@apollo/client';
 import { Divider } from 'antd';
 import React from 'react';
 import styled from 'styled-components';
-import { EntityType, Exact } from '../../../../types.generated';
-import useGetDataForProfile from '../containers/profile/useGetDataForProfile';
-import EntityContext from '../EntityContext';
-import { GenericEntityProperties } from '../types';
-import EmbeddedHeader from './EmbeddedHeader';
-import { SidebarAboutSection } from '../containers/profile/sidebar/AboutSection/SidebarAboutSection';
-import { SidebarOwnerSection } from '../containers/profile/sidebar/Ownership/sidebar/SidebarOwnerSection';
-import { SidebarTagsSection } from '../containers/profile/sidebar/SidebarTagsSection';
-import { SidebarDomainSection } from '../containers/profile/sidebar/Domain/SidebarDomainSection';
-import UpstreamHealth from './UpstreamHealth/UpstreamHealth';
-import NonExistentEntityPage from '../entity/NonExistentEntityPage';
-import DataProductSection from '../containers/profile/sidebar/DataProduct/DataProductSection';
+
+import { EntityContext } from '@app/entity/shared/EntityContext';
+import { SidebarAboutSection } from '@app/entity/shared/containers/profile/sidebar/AboutSection/SidebarAboutSection';
+import DataProductSection from '@app/entity/shared/containers/profile/sidebar/DataProduct/DataProductSection';
+import { SidebarDomainSection } from '@app/entity/shared/containers/profile/sidebar/Domain/SidebarDomainSection';
+import { SidebarOwnerSection } from '@app/entity/shared/containers/profile/sidebar/Ownership/sidebar/SidebarOwnerSection';
+import { SidebarTagsSection } from '@app/entity/shared/containers/profile/sidebar/SidebarTagsSection';
+import useGetDataForProfile from '@app/entity/shared/containers/profile/useGetDataForProfile';
+import EmbeddedHeader from '@app/entity/shared/embed/EmbeddedHeader';
+import UpstreamHealth from '@app/entity/shared/embed/UpstreamHealth/UpstreamHealth';
+import NonExistentEntityPage from '@app/entity/shared/entity/NonExistentEntityPage';
+import { GenericEntityProperties } from '@app/entity/shared/types';
+
+import { EntityType, Exact } from '@types';
 
 const LoadingWrapper = styled.div`
     display: flex;
@@ -55,6 +57,8 @@ export default function EmbeddedProfile<T>({ urn, entityType, getOverridePropert
         return <NonExistentEntityPage />;
     }
 
+    const readOnly = false;
+
     return (
         <EntityContext.Provider
             value={{
@@ -80,15 +84,15 @@ export default function EmbeddedProfile<T>({ urn, entityType, getOverridePropert
                     <StyledDivider />
                     <UpstreamHealth />
                     <StyledDivider />
-                    <SidebarAboutSection readOnly />
+                    <SidebarAboutSection readOnly={readOnly} />
                     <StyledDivider />
-                    <SidebarOwnerSection readOnly />
+                    <SidebarOwnerSection readOnly={readOnly} />
                     <StyledDivider />
-                    <SidebarTagsSection readOnly properties={{ hasTags: true, hasTerms: true }} />
+                    <SidebarTagsSection readOnly={readOnly} properties={{ hasTags: true, hasTerms: true }} />
                     <StyledDivider />
-                    <SidebarDomainSection readOnly />
+                    <SidebarDomainSection readOnly={readOnly} />
                     <StyledDivider />
-                    <DataProductSection readOnly />
+                    <DataProductSection readOnly={readOnly} />
                 </>
             )}
         </EntityContext.Provider>

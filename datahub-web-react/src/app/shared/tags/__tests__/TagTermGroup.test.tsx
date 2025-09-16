@@ -1,11 +1,12 @@
-import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react';
 import { MockedProvider } from '@apollo/client/testing';
+import { fireEvent, render, waitFor } from '@testing-library/react';
+import React from 'react';
 
-import TagTermGroup from '../TagTermGroup';
-import TestPageContainer from '../../../../utils/test-utils/TestPageContainer';
-import { EntityType, GlossaryTerms } from '../../../../types.generated';
-import { mocks } from '../../../../Mocks';
+import TagTermGroup from '@app/shared/tags/TagTermGroup';
+import { mocks } from '@src/Mocks';
+import TestPageContainer from '@utils/test-utils/TestPageContainer';
+
+import { EntityType, GlobalTags, GlossaryTerms } from '@types';
 
 const legacyTag = {
     urn: 'urn:li:tag:legacy',
@@ -50,7 +51,7 @@ describe('TagTermGroup', () => {
         const { getByText, getByLabelText, queryAllByLabelText, queryByText } = render(
             <MockedProvider mocks={mocks} addTypename={false}>
                 <TestPageContainer>
-                    <TagTermGroup editableTags={globalTags1} canRemove />
+                    <TagTermGroup editableTags={globalTags1 as GlobalTags} canRemove />
                 </TestPageContainer>
             </MockedProvider>,
         );
@@ -72,7 +73,7 @@ describe('TagTermGroup', () => {
         const { getByText, queryByLabelText, queryByText } = render(
             <MockedProvider mocks={mocks} addTypename={false}>
                 <TestPageContainer>
-                    <TagTermGroup uneditableTags={globalTags2} />
+                    <TagTermGroup uneditableTags={globalTags2 as GlobalTags} />
                 </TestPageContainer>
             </MockedProvider>,
         );
@@ -85,7 +86,11 @@ describe('TagTermGroup', () => {
         const { getByText, queryByText, queryAllByLabelText } = render(
             <MockedProvider mocks={mocks} addTypename={false}>
                 <TestPageContainer>
-                    <TagTermGroup uneditableTags={globalTags1} editableTags={globalTags2} canRemove />
+                    <TagTermGroup
+                        uneditableTags={globalTags1 as GlobalTags}
+                        editableTags={globalTags2 as GlobalTags}
+                        canRemove
+                    />
                 </TestPageContainer>
             </MockedProvider>,
         );
@@ -102,8 +107,8 @@ describe('TagTermGroup', () => {
                     <TagTermGroup
                         entityUrn="urn:li:chart:123"
                         entityType={EntityType.Chart}
-                        uneditableTags={globalTags1}
-                        editableTags={globalTags2}
+                        uneditableTags={globalTags1 as GlobalTags}
+                        editableTags={globalTags2 as GlobalTags}
                         canRemove
                         canAddTag
                     />
@@ -124,8 +129,8 @@ describe('TagTermGroup', () => {
                     <TagTermGroup
                         entityUrn="urn:li:chart:123"
                         entityType={EntityType.Chart}
-                        uneditableTags={globalTags1}
-                        editableTags={globalTags2}
+                        uneditableTags={globalTags1 as GlobalTags}
+                        editableTags={globalTags2 as GlobalTags}
                         canRemove
                         canAddTerm
                     />

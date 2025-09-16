@@ -4,7 +4,6 @@ from unittest.mock import patch
 
 import pytest
 
-from datahub.configuration.common import ConfigurationError
 from datahub.emitter.mcp import MetadataChangeProposalWrapper
 from datahub.ingestion.api.common import PipelineContext
 from datahub.ingestion.source.pulsar import (
@@ -24,6 +23,9 @@ mock_schema_response: Dict[str, Any] = {
 
 
 class TestPulsarSourceConfig:
+    # TODO: While these tests work, we really shouldn't be calling pydantic
+    # validator methods directly.
+
     def test_pulsar_source_config_valid_web_service_url(self):
         assert (
             PulsarSourceConfig().web_service_url_scheme_host_port(
@@ -34,7 +36,7 @@ class TestPulsarSourceConfig:
 
     def test_pulsar_source_config_invalid_web_service_url_scheme(self):
         with pytest.raises(
-            ConfigurationError, match=r"Scheme should be http or https, found ftp"
+            ValueError, match=r"Scheme should be http or https, found ftp"
         ):
             PulsarSourceConfig().web_service_url_scheme_host_port(
                 "ftp://localhost:8080/"
@@ -42,7 +44,7 @@ class TestPulsarSourceConfig:
 
     def test_pulsar_source_config_invalid_web_service_url_host(self):
         with pytest.raises(
-            ConfigurationError,
+            ValueError,
             match=r"Not a valid hostname, hostname contains invalid characters, found localhost&",
         ):
             PulsarSourceConfig().web_service_url_scheme_host_port(
@@ -147,8 +149,22 @@ class TestPulsarSource(unittest.TestCase):
             # http://localhost:8080/admin/v2/non-persistent/t_1/ns_1/partitioned
             # http://localhost:8080/admin/v2/schemas/t_1/ns_1/topic_1/schema
             assert mock.call_count == 7
-            # expecting 5 mcp for one topic with default config
-            assert len(work_units) == 5
+            # expecting 6 mcp for one topic with default config
+            assert len(work_units) == 6
+            aspect_names = set(
+                wu.metadata.aspectName
+                for wu in work_units
+                if isinstance(wu.metadata, MetadataChangeProposalWrapper)
+            )
+            assert len(aspect_names) == 6
+            assert aspect_names == {
+                "status",
+                "schemaMetadata",
+                "datasetProperties",
+                "browsePaths",
+                "subTypes",
+                "browsePathsV2",
+            }
 
     @patch("datahub.ingestion.source.pulsar.requests.Session.get", autospec=True)
     def test_pulsar_source_get_workunits_custom_tenant(self, mock_session):
@@ -188,8 +204,22 @@ class TestPulsarSource(unittest.TestCase):
             # http://localhost:8080/admin/v2/schemas/t_1/ns_1/topic_1/schema
             # http://localhost:8080/admin/v2/namespaces/t_2
             assert mock.call_count == 7
-            # expecting 5 mcp for one topic with default config
-            assert len(work_units) == 5
+            # expecting 6 mcp for one topic with default config
+            assert len(work_units) == 6
+            aspect_names = set(
+                wu.metadata.aspectName
+                for wu in work_units
+                if isinstance(wu.metadata, MetadataChangeProposalWrapper)
+            )
+            assert len(aspect_names) == 6
+            assert aspect_names == {
+                "status",
+                "schemaMetadata",
+                "datasetProperties",
+                "browsePaths",
+                "subTypes",
+                "browsePathsV2",
+            }
 
     @patch("datahub.ingestion.source.pulsar.requests.Session.get", autospec=True)
     def test_pulsar_source_get_workunits_patterns(self, mock_session):
@@ -235,5 +265,19 @@ class TestPulsarSource(unittest.TestCase):
             # http://localhost:8080/admin/v2/schemas/t_1/ns_1/topic_1/schema
             # http://localhost:8080/admin/v2/namespaces/t_2
             assert mock.call_count == 7
-            # expecting 5 mcp for one topic with default config
-            assert len(work_units) == 5
+            # expecting 6 mcp for one topic with default config
+            assert len(work_units) == 6
+            aspect_names = set(
+                wu.metadata.aspectName
+                for wu in work_units
+                if isinstance(wu.metadata, MetadataChangeProposalWrapper)
+            )
+            assert len(aspect_names) == 6
+            assert aspect_names == {
+                "status",
+                "schemaMetadata",
+                "datasetProperties",
+                "browsePaths",
+                "subTypes",
+                "browsePathsV2",
+            }

@@ -1,9 +1,11 @@
 package com.datahub.authorization;
 
-import com.datahub.authentication.Authentication;
+import static com.linkedin.metadata.Constants.*;
+
 import com.google.common.collect.ImmutableSet;
 import com.linkedin.common.Owner;
 import com.linkedin.common.Ownership;
+import com.linkedin.common.UrnArray;
 import com.linkedin.common.urn.Urn;
 import com.linkedin.common.urn.UrnUtils;
 import com.linkedin.data.template.StringArray;
@@ -23,75 +25,72 @@ import com.linkedin.policy.PolicyMatchCondition;
 import com.linkedin.policy.PolicyMatchCriterion;
 import com.linkedin.policy.PolicyMatchCriterionArray;
 import com.linkedin.policy.PolicyMatchFilter;
-import java.net.URISyntaxException;
+import io.datahubproject.metadata.context.OperationContext;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
+import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
-
-import static com.linkedin.metadata.Constants.*;
-
+import org.apache.commons.collections4.map.HashedMap;
 
 @Slf4j
 @RequiredArgsConstructor
 public class PolicyEngine {
 
-  private final Authentication _systemAuthentication;
   private final EntityClient _entityClient;
 
   public PolicyEvaluationResult evaluatePolicy(
+      @Nonnull OperationContext opContext,
       final DataHubPolicyInfo policy,
-      final String actorStr,
+      final ResolvedEntitySpec resolvedActorSpec,
       final String privilege,
-      final Optional<ResolvedResourceSpec> resource) {
-    try {
-      // Currently Actor must be an urn. Consider whether this contract should be pushed up.
-      final Urn actor = Urn.createFromString(actorStr);
-      return evaluatePolicy(policy, actor, privilege, resource);
-    } catch (URISyntaxException e) {
-      log.error(String.format("Failed to bind actor %s to an URN. Actors must be URNs. Denying the authorization request", actorStr));
-      return PolicyEvaluationResult.DENIED;
-    }
-  }
-
-  public PolicyEvaluationResult evaluatePolicy(
-      final DataHubPolicyInfo policy,
-      final Urn actor,
-      final String privilege,
-      final Optional<ResolvedResourceSpec> resource) {
+      final Optional<ResolvedEntitySpec> resource,
+      final List<ResolvedEntitySpec> subResources) {
 
     final PolicyEvaluationContext context = new PolicyEvaluationContext();
     log.debug("Evaluating policy {}", policy.getDisplayName());
 
     // If the privilege is not in scope, deny the request.
-    if (!isPrivilegeMatch(privilege, policy.getPrivileges(), context)) {
-      log.debug("Policy denied based on irrelevant privileges {} for {}", policy.getPrivileges(), privilege);
-      return PolicyEvaluationResult.DENIED;
+    if (!isPrivilegeMatch(privilege, policy.getPrivileges())) {
+      return new PolicyEvaluationResult(
+          policy.getDisplayName(),
+          false,
+          String.format(
+              "Policy denied based on irrelevant privileges %s for %s",
+              policy.getPrivileges(), privilege));
     }
 
     // If policy is not applicable, deny the request
-    if (!isPolicyApplicable(policy, actor, resource, context)) {
-      log.debug("Policy does not applicable for actor {} and resource {}", actor, resource);
-      return PolicyEvaluationResult.DENIED;
+    if (!isPolicyApplicable(opContext, policy, resolvedActorSpec, resource, context, subResources)
+        .isGranted()) {
+      return new PolicyEvaluationResult(
+          policy.getDisplayName(),
+          false,
+          String.format(
+              "Policy is not applicable for actor %s and resource %s",
+              resolvedActorSpec.getSpec().getEntity(), resource));
     }
 
-    // All portions of the Policy match. Grant the request.
-    return PolicyEvaluationResult.GRANTED;
+    return new PolicyEvaluationResult(policy.getDisplayName(), true, "Policy allowed");
   }
 
   public PolicyActors getMatchingActors(
-      final DataHubPolicyInfo policy,
-      final Optional<ResolvedResourceSpec> resource) {
+      final DataHubPolicyInfo policy, final Optional<ResolvedEntitySpec> resource) {
     final List<Urn> users = new ArrayList<>();
     final List<Urn> groups = new ArrayList<>();
+    final List<Urn> roles = new ArrayList<>();
     boolean allUsers = false;
     boolean allGroups = false;
     if (policyMatchesResource(policy, resource)) {
@@ -113,6 +112,9 @@ public class PolicyEngine {
       if (actorFilter.getGroups() != null) {
         groups.addAll(actorFilter.getGroups());
       }
+      if (actorFilter.getRoles() != null) {
+        roles.addAll(actorFilter.getRoles());
+      }
 
       // 2. Fetch Actors based on resource ownership.
       if (actorFilter.isResourceOwners() && resource.isPresent()) {
@@ -121,86 +123,100 @@ public class PolicyEngine {
         groups.addAll(groupOwners(owners));
       }
     }
-    return new PolicyActors(users, groups, allUsers, allGroups);
+    return new PolicyActors(users, groups, roles, allUsers, allGroups);
   }
 
-  private boolean isPolicyApplicable(
+  private PolicyEvaluationResult isPolicyApplicable(
+      @Nonnull OperationContext opContext,
       final DataHubPolicyInfo policy,
-      final Urn actor,
-      final Optional<ResolvedResourceSpec> resource,
-      final PolicyEvaluationContext context
-  ) {
+      final ResolvedEntitySpec resolvedActorSpec,
+      final Optional<ResolvedEntitySpec> resource,
+      final PolicyEvaluationContext context,
+      final List<ResolvedEntitySpec> subResources) {
 
     // If policy is inactive, simply return DENY.
     if (PoliciesConfig.INACTIVE_POLICY_STATE.equals(policy.getState())) {
-      return false;
+      return new PolicyEvaluationResult(policy.getDisplayName(), false, "Inactive Policy");
     }
 
     // If the resource is not in scope, deny the request.
-    if (!isResourceMatch(policy.getType(), policy.getResources(), resource, context)) {
-      return false;
+    if (!isResourceMatch(policy.getType(), policy.getResources(), resource)) {
+      return new PolicyEvaluationResult(policy.getDisplayName(), false, "Resource does not match");
+    }
+
+    if (!isSubResourceAllowed(policy.getResources(), subResources)) {
+      return new PolicyEvaluationResult(policy.getDisplayName(), false, "SubResource not allowed.");
     }
 
     // If the actor does not match, deny the request.
-    if (!isActorMatch(actor, policy.getActors(), resource, context)) {
-      return false;
+    boolean isActorMatched =
+        isActorMatch(opContext, resolvedActorSpec, policy.getActors(), resource, context);
+    if (isActorMatched) {
+      return new PolicyEvaluationResult(policy.getDisplayName(), true, "Policy is applicable");
+    } else {
+      return new PolicyEvaluationResult(policy.getDisplayName(), false, "Actor did not match");
     }
-
-    return true;
   }
 
-  public List<String> getGrantedPrivileges(
+  public PolicyGrantedPrivileges getGrantedPrivileges(
+      @Nonnull OperationContext opContext,
       final List<DataHubPolicyInfo> policies,
-      final Urn actor,
-      final Optional<ResolvedResourceSpec> resource) {
+      final ResolvedEntitySpec resolvedActorSpec,
+      final Optional<ResolvedEntitySpec> resource,
+      final List<ResolvedEntitySpec> subResources) {
+    Set<String> privileges = new HashSet<>();
+    Map<String, String> reasonsOfDeny = new HashedMap<>();
     PolicyEvaluationContext context = new PolicyEvaluationContext();
-    return policies.stream()
-        .filter(policy -> isPolicyApplicable(policy, actor, resource, context))
-        .flatMap(policy -> policy.getPrivileges().stream())
-        .distinct()
-        .collect(Collectors.toList());
+    for (DataHubPolicyInfo policy : policies) {
+      PolicyEvaluationResult result =
+          isPolicyApplicable(opContext, policy, resolvedActorSpec, resource, context, subResources);
+      if (result.isGranted()) {
+        privileges.addAll(policy.getPrivileges());
+      } else {
+        reasonsOfDeny.put(result.getPolicyName(), result.getReason());
+      }
+    }
+    return new PolicyGrantedPrivileges(new ArrayList<>(privileges), reasonsOfDeny);
   }
 
   /**
    * Returns true if the policy matches the resource spec, false otherwise.
    *
-   * If the policy is of type "PLATFORM", the resource will always match (since there's no resource).
-   * If the policy is of type "METADATA", the resourceSpec parameter will be matched against the
-   * resource filter defined on the policy.
+   * <p>If the policy is of type "PLATFORM", the resource will always match (since there's no
+   * resource). If the policy is of type "METADATA", the resourceSpec parameter will be matched
+   * against the resource filter defined on the policy.
    */
-  public Boolean policyMatchesResource(final DataHubPolicyInfo policy, final Optional<ResolvedResourceSpec> resourceSpec) {
-    return isResourceMatch(policy.getType(), policy.getResources(), resourceSpec,
-        new PolicyEvaluationContext());
+  public Boolean policyMatchesResource(
+      final DataHubPolicyInfo policy, final Optional<ResolvedEntitySpec> resourceSpec) {
+    return isResourceMatch(policy.getType(), policy.getResources(), resourceSpec);
   }
 
   /**
-   * Returns true if the privilege portion of a DataHub policy matches a the privilege being evaluated, false otherwise.
+   * Returns true if the privilege portion of a DataHub policy matches a the privilege being
+   * evaluated, false otherwise.
    */
   private boolean isPrivilegeMatch(
-      final String requestPrivilege,
-      final List<String> policyPrivileges,
-      final PolicyEvaluationContext context) {
+      final String requestPrivilege, final List<String> policyPrivileges) {
     return policyPrivileges.contains(requestPrivilege);
   }
 
   /**
-   * Returns true if the resource portion of a DataHub policy matches a the resource being evaluated, false otherwise.
+   * Returns true if the resource portion of a DataHub policy matches a the resource being
+   * evaluated, false otherwise.
    */
   private boolean isResourceMatch(
       final String policyType,
       final @Nullable DataHubResourceFilter policyResourceFilter,
-      final Optional<ResolvedResourceSpec> requestResource,
-      final PolicyEvaluationContext context) {
+      final Optional<ResolvedEntitySpec> requestResource) {
     if (PoliciesConfig.PLATFORM_POLICY_TYPE.equals(policyType)) {
       // Currently, platform policies have no associated resource.
       return true;
     }
     if (policyResourceFilter == null) {
-      // No resource defined on the policy.
+      log.debug("No resource defined on the policy.");
       return true;
     }
-    if (!requestResource.isPresent()) {
-      // Resource filter present in policy, but no resource spec provided.
+    if (requestResource.isEmpty()) {
       log.debug("Resource filter present in policy, but no resource spec provided.");
       return false;
     }
@@ -208,9 +224,32 @@ public class PolicyEngine {
     return checkFilter(filter, requestResource.get());
   }
 
+  private boolean isSubResourceAllowed(
+      final @Nullable DataHubResourceFilter policyResourceFilter,
+      final List<ResolvedEntitySpec> subResources) {
+    if (policyResourceFilter == null) {
+      log.debug("No resource defined on the policy.");
+      return true;
+    }
+    if (subResources.isEmpty()) {
+      log.debug("No subresources to evaluate.");
+      return true;
+    }
+    if (policyResourceFilter.getPrivilegeConstraints() != null) {
+      PolicyMatchFilter filter = policyResourceFilter.getPrivilegeConstraints();
+      return subResources.stream()
+          .allMatch(
+              subResource ->
+                  WILDCARD_URN.toString().equals(subResource.getSpec().getEntity())
+                      || checkFilter(filter, subResource));
+    }
+    log.debug("No modification constraints specified.");
+    return true;
+  }
+
   /**
-   * Get filter object from policy resource filter. Make sure it is backward compatible by constructing PolicyMatchFilter object
-   * from other fields if the filter field is not set
+   * Get filter object from policy resource filter. Make sure it is backward compatible by
+   * constructing PolicyMatchFilter object from other fields if the filter field is not set
    */
   private PolicyMatchFilter getFilter(DataHubResourceFilter policyResourceFilter) {
     if (policyResourceFilter.hasFilter()) {
@@ -218,247 +257,320 @@ public class PolicyEngine {
     }
     PolicyMatchCriterionArray criteria = new PolicyMatchCriterionArray();
     if (policyResourceFilter.hasType()) {
-      criteria.add(new PolicyMatchCriterion().setField(ResourceFieldType.RESOURCE_TYPE.name())
-          .setValues(new StringArray(Collections.singletonList(policyResourceFilter.getType()))));
-    }
-    if (policyResourceFilter.hasType() && policyResourceFilter.hasResources()
-        && !policyResourceFilter.isAllResources()) {
       criteria.add(
-          new PolicyMatchCriterion().setField(ResourceFieldType.RESOURCE_URN.name()).setValues(policyResourceFilter.getResources()));
+          new PolicyMatchCriterion()
+              .setField(EntityFieldType.TYPE.name())
+              .setValues(
+                  new StringArray(Collections.singletonList(policyResourceFilter.getType()))));
+    }
+
+    if (policyResourceFilter.hasResources() && !policyResourceFilter.isAllResources()) {
+      criteria.add(
+          new PolicyMatchCriterion()
+              .setField(EntityFieldType.URN.name())
+              .setValues(policyResourceFilter.getResources()));
     }
     return new PolicyMatchFilter().setCriteria(criteria);
   }
 
-  private boolean checkFilter(final PolicyMatchFilter filter, final ResolvedResourceSpec resource) {
+  private boolean checkFilter(final PolicyMatchFilter filter, final ResolvedEntitySpec resource) {
     return filter.getCriteria().stream().allMatch(criterion -> checkCriterion(criterion, resource));
   }
 
-  private boolean checkCriterion(final PolicyMatchCriterion criterion, final ResolvedResourceSpec resource) {
-    ResourceFieldType resourceFieldType;
+  private boolean checkCriterion(
+      final PolicyMatchCriterion criterion, final ResolvedEntitySpec resource) {
+    EntityFieldType entityFieldType;
     try {
-      resourceFieldType = ResourceFieldType.valueOf(criterion.getField().toUpperCase());
+      entityFieldType = EntityFieldType.valueOf(criterion.getField().toUpperCase());
     } catch (IllegalArgumentException e) {
       log.error("Unsupported field type {}", criterion.getField());
       return false;
     }
 
-    Set<String> fieldValues = resource.getFieldValues(resourceFieldType);
-    return criterion.getValues()
-        .stream()
-        .anyMatch(filterValue -> checkCondition(fieldValues, filterValue, criterion.getCondition()));
+    Set<String> fieldValues = resource.getFieldValues(entityFieldType);
+    return checkCondition(fieldValues, criterion.getValues(), criterion.getCondition());
   }
 
-  private boolean checkCondition(Set<String> fieldValues, String filterValue, PolicyMatchCondition condition) {
-    if (condition == PolicyMatchCondition.EQUALS) {
-      return fieldValues.contains(filterValue);
+  private boolean checkCondition(
+      Set<String> fieldValues, List<String> filterValues, PolicyMatchCondition condition) {
+    switch (condition) {
+      case EQUALS:
+        return filterValues.stream().anyMatch(fieldValues::contains);
+      case STARTS_WITH:
+        return filterValues.stream()
+            .anyMatch(filterValue -> fieldValues.stream().anyMatch(v -> v.startsWith(filterValue)));
+      case NOT_EQUALS:
+        return filterValues.stream().noneMatch(fieldValues::contains);
+      default:
+        log.error("Unsupported condition {}", condition);
+        return false;
     }
-    log.error("Unsupported condition {}", condition);
-    return false;
   }
 
   /**
-   * Returns true if the actor portion of a DataHub policy matches a the actor being evaluated, false otherwise.
+   * Returns true if the actor portion of a DataHub policy matches the actor being evaluated, false
+   * otherwise.
    */
-  private boolean isActorMatch(
-      final Urn actor,
+  boolean isActorMatch(
+      @Nonnull OperationContext opContext,
+      final ResolvedEntitySpec resolvedActorSpec,
       final DataHubActorFilter actorFilter,
-      final Optional<ResolvedResourceSpec> resourceSpec,
+      final Optional<ResolvedEntitySpec> resourceSpec,
       final PolicyEvaluationContext context) {
 
     // 1. If the actor is a matching "User" in the actor filter, return true immediately.
-    if (isUserMatch(actor, actorFilter)) {
+    if (isUserMatch(resolvedActorSpec, actorFilter)) {
       return true;
     }
 
     // 2. If the actor is in a matching "Group" in the actor filter, return true immediately.
-    if (isGroupMatch(actor, actorFilter, context)) {
+    if (isGroupMatch(resolvedActorSpec, actorFilter, context)) {
       return true;
     }
 
-    // 3. If the actor is the owner, either directly or indirectly via a group, return true immediately.
-    if (isOwnerMatch(actor, actorFilter, resourceSpec, context)) {
+    // 3. If the actor is the owner, either directly or indirectly via a group, return true
+    // immediately.
+    if (isOwnerMatch(opContext, resolvedActorSpec, actorFilter, resourceSpec, context)) {
       return true;
     }
 
     // 4. If the actor is in a matching "Role" in the actor filter, return true immediately.
-    return isRoleMatch(actor, actorFilter, context);
+    return isRoleMatch(opContext, resolvedActorSpec, actorFilter, context);
   }
 
-  private boolean isUserMatch(final Urn actor, final DataHubActorFilter actorFilter) {
+  private boolean isUserMatch(
+      final ResolvedEntitySpec resolvedActorSpec, final DataHubActorFilter actorFilter) {
     // If the actor is a matching "User" in the actor filter, return true immediately.
-    return actorFilter.isAllUsers() || (actorFilter.hasUsers() && Objects.requireNonNull(actorFilter.getUsers())
-        .stream()
-        .anyMatch(user -> user.equals(actor)));
+    return actorFilter.isAllUsers()
+        || (actorFilter.hasUsers()
+            && Objects.requireNonNull(actorFilter.getUsers()).stream()
+                .map(Urn::toString)
+                .anyMatch(user -> user.equals(resolvedActorSpec.getSpec().getEntity())));
   }
 
-  private boolean isGroupMatch(final Urn actor, final DataHubActorFilter actorFilter, final PolicyEvaluationContext context) {
+  private boolean isGroupMatch(
+      final ResolvedEntitySpec resolvedActorSpec,
+      final DataHubActorFilter actorFilter,
+      final PolicyEvaluationContext context) {
     // If the actor is in a matching "Group" in the actor filter, return true immediately.
     if (actorFilter.isAllGroups() || actorFilter.hasGroups()) {
-      final Set<Urn> groups = resolveGroups(actor, context);
-      return actorFilter.isAllGroups() || (actorFilter.hasGroups() && Objects.requireNonNull(actorFilter.getGroups())
-          .stream()
-          .anyMatch(groups::contains));
+      final Set<String> groups = resolveGroups(resolvedActorSpec, context);
+      return (actorFilter.isAllGroups() && !groups.isEmpty())
+          || (actorFilter.hasGroups()
+              && Objects.requireNonNull(actorFilter.getGroups()).stream()
+                  .map(Urn::toString)
+                  .anyMatch(groups::contains));
     }
     // If there are no groups on the policy, return false for the group match.
     return false;
   }
 
   private boolean isOwnerMatch(
-      final Urn actor,
+      @Nonnull OperationContext opContext,
+      final ResolvedEntitySpec resolvedActorSpec,
       final DataHubActorFilter actorFilter,
-      final Optional<ResolvedResourceSpec> requestResource,
+      final Optional<ResolvedEntitySpec> requestResource,
       final PolicyEvaluationContext context) {
-    // If the policy does not apply to owners, or there is no resource to own, return false immediately.
-    if (!actorFilter.isResourceOwners() || !requestResource.isPresent()) {
+    // If the policy does not apply to owners, or there is no resource to own, return false
+    // immediately.
+    if (!actorFilter.isResourceOwners() || requestResource.isEmpty()) {
       return false;
     }
     List<Urn> ownershipTypes = actorFilter.getResourceOwnersTypes();
-    return isActorOwner(actor, requestResource.get(), ownershipTypes, context);
+    return isActorOwner(
+        opContext, resolvedActorSpec, requestResource.get(), ownershipTypes, context);
   }
 
-  private Set<String> getOwnersForType(ResourceSpec resourceSpec, List<Urn> ownershipTypes) {
-    Urn entityUrn = UrnUtils.getUrn(resourceSpec.getResource());
-    EnvelopedAspect ownershipAspect;
-    try {
-      EntityResponse response = _entityClient.getV2(entityUrn.getEntityType(), entityUrn,
-              Collections.singleton(Constants.OWNERSHIP_ASPECT_NAME), _systemAuthentication);
-      if (response == null || !response.getAspects().containsKey(Constants.OWNERSHIP_ASPECT_NAME)) {
+  private Set<String> getOwnersForType(
+      @Nonnull OperationContext opContext,
+      @Nonnull EntitySpec resourceSpec,
+      @Nonnull List<Urn> ownershipTypes) {
+    if (resourceSpec.getEntity().isEmpty()) {
+      return Set.of();
+    } else {
+      Urn entityUrn = UrnUtils.getUrn(resourceSpec.getEntity());
+      EnvelopedAspect ownershipAspect;
+      try {
+        EntityResponse response =
+            _entityClient.getV2(
+                opContext,
+                entityUrn.getEntityType(),
+                entityUrn,
+                Collections.singleton(Constants.OWNERSHIP_ASPECT_NAME));
+        if (response == null
+            || !response.getAspects().containsKey(Constants.OWNERSHIP_ASPECT_NAME)) {
+          return Collections.emptySet();
+        }
+        ownershipAspect = response.getAspects().get(Constants.OWNERSHIP_ASPECT_NAME);
+      } catch (Exception e) {
+        log.error("Error while retrieving ownership aspect for urn {}", entityUrn, e);
         return Collections.emptySet();
       }
-      ownershipAspect = response.getAspects().get(Constants.OWNERSHIP_ASPECT_NAME);
-    } catch (Exception e) {
-      log.error("Error while retrieving ownership aspect for urn {}", entityUrn, e);
-      return Collections.emptySet();
+      Ownership ownership = new Ownership(ownershipAspect.getValue().data());
+      Stream<Owner> ownersStream = ownership.getOwners().stream();
+      if (ownershipTypes != null) {
+        ownersStream = ownersStream.filter(owner -> ownershipTypes.contains(owner.getTypeUrn()));
+      }
+      return ownersStream.map(owner -> owner.getOwner().toString()).collect(Collectors.toSet());
     }
-    Ownership ownership = new Ownership(ownershipAspect.getValue().data());
-    Stream<Owner> ownersStream = ownership.getOwners().stream();
-    if (ownershipTypes != null) {
-      ownersStream = ownersStream.filter(owner -> ownershipTypes.contains(owner.getTypeUrn()));
-    }
-    return ownersStream.map(owner -> owner.getOwner().toString()).collect(Collectors.toSet());
   }
 
-  private boolean isActorOwner(Urn actor, ResolvedResourceSpec resourceSpec, List<Urn> ownershipTypes, PolicyEvaluationContext context) {
-    Set<String> owners = this.getOwnersForType(resourceSpec.getSpec(), ownershipTypes);
-    if (isUserOwner(actor, owners)) {
+  private boolean isActorOwner(
+      @Nonnull OperationContext opContext,
+      final ResolvedEntitySpec resolvedActorSpec,
+      ResolvedEntitySpec resourceSpec,
+      List<Urn> ownershipTypes,
+      PolicyEvaluationContext context) {
+    Set<String> owners = this.getOwnersForType(opContext, resourceSpec.getSpec(), ownershipTypes);
+    if (isUserOwner(resolvedActorSpec, owners)) {
       return true;
     }
-    final Set<Urn> groups = resolveGroups(actor, context);
-    if (isGroupOwner(groups, owners)) {
-      return true;
-    }
-    return false;
+    final Set<String> groups = resolveGroups(resolvedActorSpec, context);
+
+    return isGroupOwner(groups, owners);
   }
 
-  private boolean isUserOwner(Urn actor, Set<String> owners) {
-    return owners.contains(actor.toString());
+  private boolean isUserOwner(final ResolvedEntitySpec resolvedActorSpec, Set<String> owners) {
+    return owners.contains(resolvedActorSpec.getSpec().getEntity());
   }
 
-  private boolean isGroupOwner(Set<Urn> groups, Set<String> owners) {
-    return groups.stream().anyMatch(group -> owners.contains(group.toString()));
+  private boolean isGroupOwner(Set<String> groups, Set<String> owners) {
+    return groups.stream().anyMatch(owners::contains);
   }
 
-  private boolean isRoleMatch(final Urn actor, final DataHubActorFilter actorFilter,
+  private boolean isRoleMatch(
+      @Nonnull OperationContext opContext,
+      final ResolvedEntitySpec resolvedActorSpec,
+      final DataHubActorFilter actorFilter,
       final PolicyEvaluationContext context) {
     // Can immediately return false if the actor filter does not have any roles
     if (!actorFilter.hasRoles()) {
       return false;
     }
     // If the actor has a matching "Role" in the actor filter, return true immediately.
-    Set<Urn> actorRoles = resolveRoles(actor, context);
-    return Objects.requireNonNull(actorFilter.getRoles())
-        .stream()
-        .anyMatch(actorRoles::contains);
+    Set<Urn> actorRoles = resolveRoles(opContext, resolvedActorSpec, context);
+    return Objects.requireNonNull(actorFilter.getRoles()).stream().anyMatch(actorRoles::contains);
   }
 
-  private Set<Urn> resolveRoles(Urn actor, PolicyEvaluationContext context) {
+  private Set<Urn> resolveRoles(
+      @Nonnull OperationContext opContext,
+      final ResolvedEntitySpec resolvedActorSpec,
+      PolicyEvaluationContext context) {
     if (context.roles != null) {
       return context.roles;
     }
 
+    String actor = resolvedActorSpec.getSpec().getEntity();
+
     Set<Urn> roles = new HashSet<>();
     final EnvelopedAspectMap aspectMap;
-
     try {
-      final EntityResponse corpUser = _entityClient.batchGetV2(CORP_USER_ENTITY_NAME, Collections.singleton(actor),
-          Collections.singleton(ROLE_MEMBERSHIP_ASPECT_NAME), _systemAuthentication).get(actor);
+      Urn actorUrn = Urn.createFromString(actor);
+      final EntityResponse corpUser =
+          _entityClient
+              .batchGetV2(
+                  opContext,
+                  CORP_USER_ENTITY_NAME,
+                  Collections.singleton(actorUrn),
+                  ImmutableSet.of(
+                      ROLE_MEMBERSHIP_ASPECT_NAME,
+                      GROUP_MEMBERSHIP_ASPECT_NAME,
+                      NATIVE_GROUP_MEMBERSHIP_ASPECT_NAME))
+              .get(actorUrn);
       if (corpUser == null || !corpUser.hasAspects()) {
         return roles;
       }
       aspectMap = corpUser.getAspects();
     } catch (Exception e) {
-      log.error(String.format("Failed to fetch %s for urn %s", ROLE_MEMBERSHIP_ASPECT_NAME, actor), e);
+      log.error(
+          String.format("Failed to fetch %s for urn %s", ROLE_MEMBERSHIP_ASPECT_NAME, actor), e);
       return roles;
     }
 
-    if (!aspectMap.containsKey(ROLE_MEMBERSHIP_ASPECT_NAME)) {
-      return roles;
+    if (aspectMap.containsKey(ROLE_MEMBERSHIP_ASPECT_NAME)) {
+      RoleMembership roleMembership =
+          new RoleMembership(aspectMap.get(ROLE_MEMBERSHIP_ASPECT_NAME).getValue().data());
+      if (roleMembership.hasRoles()) {
+        roles.addAll(roleMembership.getRoles());
+      }
     }
 
-    RoleMembership roleMembership = new RoleMembership(aspectMap.get(ROLE_MEMBERSHIP_ASPECT_NAME).getValue().data());
-    if (roleMembership.hasRoles()) {
-      roles.addAll(roleMembership.getRoles());
+    List<Urn> groups = new ArrayList<>();
+    if (aspectMap.containsKey(GROUP_MEMBERSHIP_ASPECT_NAME)) {
+      GroupMembership groupMembership =
+          new GroupMembership(aspectMap.get(GROUP_MEMBERSHIP_ASPECT_NAME).getValue().data());
+      groups.addAll(groupMembership.getGroups());
+    }
+    if (aspectMap.containsKey(NATIVE_GROUP_MEMBERSHIP_ASPECT_NAME)) {
+      NativeGroupMembership nativeGroupMembership =
+          new NativeGroupMembership(
+              aspectMap.get(NATIVE_GROUP_MEMBERSHIP_ASPECT_NAME).getValue().data());
+      groups.addAll(nativeGroupMembership.getNativeGroups());
+    }
+    if (!groups.isEmpty()) {
+      GroupMembership memberships = new GroupMembership();
+      memberships.setGroups(new UrnArray(groups));
+      roles.addAll(getRolesFromGroups(opContext, memberships));
+    }
+
+    if (!roles.isEmpty()) {
       context.setRoles(roles);
     }
+
     return roles;
   }
 
-  private Set<Urn> resolveGroups(Urn actor, PolicyEvaluationContext context) {
+  private Set<Urn> getRolesFromGroups(
+      @Nonnull OperationContext opContext, final GroupMembership groupMembership) {
+
+    HashSet<Urn> groups = new HashSet<>(groupMembership.getGroups());
+    try {
+      Map<Urn, EntityResponse> responseMap =
+          _entityClient.batchGetV2(
+              opContext,
+              CORP_GROUP_ENTITY_NAME,
+              groups,
+              ImmutableSet.of(ROLE_MEMBERSHIP_ASPECT_NAME));
+
+      return responseMap.keySet().stream()
+          .filter(Objects::nonNull)
+          .filter(key -> responseMap.get(key) != null)
+          .filter(key -> responseMap.get(key).hasAspects())
+          .map(key -> responseMap.get(key).getAspects())
+          .filter(aspectMap -> aspectMap.containsKey(ROLE_MEMBERSHIP_ASPECT_NAME))
+          .map(
+              aspectMap ->
+                  new RoleMembership(aspectMap.get(ROLE_MEMBERSHIP_ASPECT_NAME).getValue().data()))
+          .filter(RoleMembership::hasRoles)
+          .map(RoleMembership::getRoles)
+          .flatMap(List::stream)
+          .collect(Collectors.toSet());
+
+    } catch (Exception e) {
+      log.error(
+          String.format("Failed to fetch %s for urns %s", ROLE_MEMBERSHIP_ASPECT_NAME, groups), e);
+      return new HashSet<>();
+    }
+  }
+
+  private Set<String> resolveGroups(
+      ResolvedEntitySpec resolvedActorSpec, PolicyEvaluationContext context) {
     if (context.groups != null) {
       return context.groups;
     }
 
-    Set<Urn> groups = new HashSet<>();
-    final EnvelopedAspectMap aspectMap;
-
-    try {
-      final EntityResponse corpUser = _entityClient.batchGetV2(CORP_USER_ENTITY_NAME, Collections.singleton(actor),
-              ImmutableSet.of(GROUP_MEMBERSHIP_ASPECT_NAME, NATIVE_GROUP_MEMBERSHIP_ASPECT_NAME), _systemAuthentication)
-          .get(actor);
-      if (corpUser == null || !corpUser.hasAspects()) {
-        return groups;
-      }
-      aspectMap = corpUser.getAspects();
-    } catch (Exception e) {
-      throw new RuntimeException(String.format("Failed to fetch %s and %s for urn %s", GROUP_MEMBERSHIP_ASPECT_NAME,
-          NATIVE_GROUP_MEMBERSHIP_ASPECT_NAME, actor), e);
-    }
-
-    Optional<GroupMembership> maybeGroupMembership = resolveGroupMembership(aspectMap);
-    maybeGroupMembership.ifPresent(groupMembership -> groups.addAll(groupMembership.getGroups()));
-
-    Optional<NativeGroupMembership> maybeNativeGroupMembership = resolveNativeGroupMembership(aspectMap);
-    maybeNativeGroupMembership.ifPresent(
-        nativeGroupMembership -> groups.addAll(nativeGroupMembership.getNativeGroups()));
+    Set<String> groups = resolvedActorSpec.getGroupMembership();
 
     context.setGroups(groups); // Cache the groups.
     return groups;
   }
 
-  // TODO: Optimization - Cache the group membership. Refresh periodically.
-  private Optional<GroupMembership> resolveGroupMembership(final EnvelopedAspectMap aspectMap) {
-    if (aspectMap.containsKey(GROUP_MEMBERSHIP_ASPECT_NAME)) {
-      return Optional.of(new GroupMembership(aspectMap.get(GROUP_MEMBERSHIP_ASPECT_NAME).getValue().data()));
-    }
-    return Optional.empty();
-  }
-
-  private Optional<NativeGroupMembership> resolveNativeGroupMembership(final EnvelopedAspectMap aspectMap) {
-    if (aspectMap.containsKey(NATIVE_GROUP_MEMBERSHIP_ASPECT_NAME)) {
-      return Optional.of(
-          new NativeGroupMembership(aspectMap.get(NATIVE_GROUP_MEMBERSHIP_ASPECT_NAME).getValue().data()));
-    }
-    return Optional.empty();
-  }
-
-  /**
-   * Class used to store state across a single Policy evaluation.
-   */
+  /** Class used to store state across a single Policy evaluation. */
   static class PolicyEvaluationContext {
-    private Set<Urn> groups;
+    private Set<String> groups;
     private Set<Urn> roles;
 
-    public void setGroups(Set<Urn> groups) {
+    public void setGroups(Set<String> groups) {
       this.groups = groups;
     }
 
@@ -467,55 +579,59 @@ public class PolicyEngine {
     }
   }
 
-  /**
-   * Class used to represent the result of a Policy evaluation
-   */
-  static class PolicyEvaluationResult {
-    public static final PolicyEvaluationResult GRANTED = new PolicyEvaluationResult(true);
-    public static final PolicyEvaluationResult DENIED = new PolicyEvaluationResult(false);
+  /** Class used to represent granted privileges and reasons why * */
+  public static class PolicyGrantedPrivileges {
+    private final List<String> privileges;
+    private final Map<String, String> reasonOfDeny;
 
+    private PolicyGrantedPrivileges(List<String> privileges, Map<String, String> reasonOfDeny) {
+      this.privileges = privileges;
+      this.reasonOfDeny = reasonOfDeny;
+    }
+
+    public List<String> getPrivileges() {
+      return this.privileges;
+    }
+
+    public Map<String, String> getReasonOfDeny() {
+      return this.reasonOfDeny;
+    }
+  }
+
+  /** Class used to represent the result of a Policy evaluation */
+  public static class PolicyEvaluationResult {
+    private final String policyName;
     private final boolean isGranted;
+    private final String reason;
 
-    private PolicyEvaluationResult(boolean isGranted) {
+    private PolicyEvaluationResult(String policyName, boolean isGranted, String reason) {
+      this.policyName = policyName;
       this.isGranted = isGranted;
+      this.reason = reason;
     }
 
     public boolean isGranted() {
       return this.isGranted;
     }
+
+    public String getReason() {
+      return this.reason;
+    }
+
+    public String getPolicyName() {
+      return this.policyName;
+    }
   }
 
-  /**
-   * Class used to represent all valid users of a policy.
-   */
+  /** Class used to represent all valid users of a policy. */
+  @Value
+  @AllArgsConstructor(access = AccessLevel.PUBLIC)
   public static class PolicyActors {
-    final List<Urn> _users;
-    final List<Urn> _groups;
-    final Boolean _allUsers;
-    final Boolean _allGroups;
-
-    public PolicyActors(final List<Urn> users, final List<Urn> groups, final Boolean allUsers, final Boolean allGroups) {
-      _users = users;
-      _groups = groups;
-      _allUsers = allUsers;
-      _allGroups = allGroups;
-    }
-
-    public List<Urn> getUsers() {
-      return _users;
-    }
-
-    public List<Urn> getGroups() {
-      return _groups;
-    }
-
-    public Boolean allUsers() {
-      return _allUsers;
-    }
-
-    public Boolean allGroups() {
-      return _allGroups;
-    }
+    List<Urn> users;
+    List<Urn> groups;
+    List<Urn> roles;
+    Boolean allUsers;
+    Boolean allGroups;
   }
 
   private List<Urn> userOwners(final Set<String> owners) {

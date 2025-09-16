@@ -1,7 +1,10 @@
+import contextlib
 import json
+from datetime import datetime, timezone
 
 import pytest
 import requests
+from freezegun import freeze_time
 
 import datahub.metadata.schema_classes as models
 from datahub.emitter.mcp import MetadataChangeProposalWrapper
@@ -9,6 +12,7 @@ from datahub.emitter.rest_emitter import DatahubRestEmitter
 
 MOCK_GMS_ENDPOINT = "http://fakegmshost:8080"
 
+FROZEN_TIME = 1618987484580
 basicAuditStamp = models.AuditStampClass(
     time=1618987484580,
     actor="urn:li:corpuser:datahub",
@@ -75,7 +79,15 @@ basicAuditStamp = models.AuditStampClass(
                         }
                     }
                 },
-                "systemMetadata": {},
+                "systemMetadata": {
+                    "lastObserved": FROZEN_TIME,
+                    "lastRunId": "no-run-id-provided",
+                    "properties": {
+                        "clientId": "acryl-datahub",
+                        "clientVersion": "1!0.0.0.dev0",
+                    },
+                    "runId": "no-run-id-provided",
+                },
             },
         ),
         (
@@ -125,7 +137,15 @@ basicAuditStamp = models.AuditStampClass(
                         }
                     }
                 },
-                "systemMetadata": {},
+                "systemMetadata": {
+                    "lastObserved": FROZEN_TIME,
+                    "lastRunId": "no-run-id-provided",
+                    "properties": {
+                        "clientId": "acryl-datahub",
+                        "clientVersion": "1!0.0.0.dev0",
+                    },
+                    "runId": "no-run-id-provided",
+                },
             },
         ),
         (
@@ -161,7 +181,15 @@ basicAuditStamp = models.AuditStampClass(
                         }
                     }
                 },
-                "systemMetadata": {},
+                "systemMetadata": {
+                    "lastObserved": FROZEN_TIME,
+                    "lastRunId": "no-run-id-provided",
+                    "properties": {
+                        "clientId": "acryl-datahub",
+                        "clientVersion": "1!0.0.0.dev0",
+                    },
+                    "runId": "no-run-id-provided",
+                },
             },
         ),
         (
@@ -229,26 +257,37 @@ basicAuditStamp = models.AuditStampClass(
             ),
             "/aspects?action=ingestProposal",
             {
+                "async": "false",
                 "proposal": {
                     "entityType": "dataset",
                     "entityUrn": "urn:li:dataset:(urn:li:dataPlatform:foo,bar,PROD)",
                     "changeType": "UPSERT",
                     "aspectName": "ownership",
                     "aspect": {
-                        "value": '{"owners": [{"owner": "urn:li:corpuser:fbar", "type": "DATAOWNER"}], "lastModified": {"time": 0, "actor": "urn:li:corpuser:fbar"}}',
+                        "value": '{"owners": [{"owner": "urn:li:corpuser:fbar", "type": "DATAOWNER"}], "ownerTypes": {}, "lastModified": {"time": 0, "actor": "urn:li:corpuser:fbar"}}',
                         "contentType": "application/json",
                     },
-                }
+                    "systemMetadata": {
+                        "lastObserved": FROZEN_TIME,
+                        "lastRunId": "no-run-id-provided",
+                        "properties": {
+                            "clientId": "acryl-datahub",
+                            "clientVersion": "1!0.0.0.dev0",
+                        },
+                        "runId": "no-run-id-provided",
+                    },
+                },
             },
         ),
     ],
 )
+@freeze_time(datetime.fromtimestamp(FROZEN_TIME / 1000, tz=timezone.utc))
 def test_datahub_rest_emitter(requests_mock, record, path, snapshot):
     def match_request_text(request: requests.Request) -> bool:
         requested_snapshot = request.json()
-        assert (
-            requested_snapshot == snapshot
-        ), f"Expected snapshot to be {json.dumps(snapshot)}, got {json.dumps(requested_snapshot)}"
+        assert requested_snapshot == snapshot, (
+            f"Expected snapshot to be {json.dumps(snapshot)}, got {json.dumps(requested_snapshot)}"
+        )
         return True
 
     requests_mock.post(
@@ -257,5 +296,18 @@ def test_datahub_rest_emitter(requests_mock, record, path, snapshot):
         additional_matcher=match_request_text,
     )
 
-    emitter = DatahubRestEmitter(MOCK_GMS_ENDPOINT)
-    emitter.emit(record)
+    with contextlib.ExitStack() as stack:
+        if isinstance(record, models.UsageAggregationClass):
+            stack.enter_context(
+                pytest.warns(
+                    DeprecationWarning,
+                    match="Use emit with a datasetUsageStatistics aspect instead",
+                )
+            )
+
+        # This test specifically exercises the restli emitter endpoints.
+        # We have additional tests specifically for the OpenAPI emitter
+        # and its request format.
+        emitter = DatahubRestEmitter(MOCK_GMS_ENDPOINT, openapi_ingestion=False)
+        stack.enter_context(emitter)
+        emitter.emit(record)

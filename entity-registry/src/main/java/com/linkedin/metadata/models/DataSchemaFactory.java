@@ -13,6 +13,8 @@ import java.net.URLClassLoader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -20,9 +22,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
+import javax.annotation.Nullable;
 import lombok.extern.slf4j.Slf4j;
 import org.reflections.Reflections;
-
+import org.reflections.scanners.SubTypesScanner;
+import org.reflections.util.ClasspathHelper;
+import org.reflections.util.ConfigurationBuilder;
 
 /**
  * Factory class to get a map of all entity schemas and aspect schemas under com.linkedin package
@@ -39,22 +44,25 @@ public class DataSchemaFactory {
   private static final String NAME_FIELD = "name";
 
   private static final DataSchemaFactory INSTANCE = new DataSchemaFactory();
-  private static final String[] DEFAULT_TOP_LEVEL_NAMESPACES = new String[]{"com", "org", "io", "datahub"};
+  private static final String[] DEFAULT_TOP_LEVEL_NAMESPACES =
+      new String[] {"com", "org", "io", "datahub"};
 
   public DataSchemaFactory() {
-    this(new String[]{"com.linkedin", "com.datahub"});
+    this(new String[] {"com.linkedin", "com.datahub"});
   }
 
   public DataSchemaFactory(String classPath) {
-    this(new String[]{classPath});
+    this(new String[] {classPath});
   }
+
   public DataSchemaFactory(String[] classPaths) {
     this(classPaths, null);
   }
 
   /**
-   * Construct a DataSchemaFactory with classes and schemas found under a specific folder.
-   * This will only look for classes under the `com`, `org` or `datahub` top level namespaces.
+   * Construct a DataSchemaFactory with classes and schemas found under a specific folder. This will
+   * only look for classes under the `com`, `org` or `datahub` top level namespaces.
+   *
    * @param pluginLocation The location of the classes and schema files.
    */
   public static DataSchemaFactory withCustomClasspath(Path pluginLocation) throws IOException {
@@ -62,37 +70,53 @@ public class DataSchemaFactory {
       // no custom classpath, just return the default factory
       return INSTANCE;
     }
-    // first we load up classes from the classpath
-    File pluginDir = pluginLocation.toFile();
-    if (!pluginDir.exists()) {
-      throw new RuntimeException(
-          "Failed to find plugin directory " + pluginDir.getAbsolutePath() + ". Current directory is " + new File(
-              ".").getAbsolutePath());
-    }
-    List<URL> urls = new ArrayList<URL>();
-    if (pluginDir.isDirectory()) {
-      List<Path> jarFiles = Files.walk(pluginLocation)
-          .filter(Files::isRegularFile)
-          .filter(p -> p.toString().endsWith(".jar"))
-          .collect(Collectors.toList());
-      for (Path f : jarFiles) {
-        URL url = f.toUri().toURL();
-        if (url != null) {
-          urls.add(url);
-        }
-      }
+
+    return new DataSchemaFactory(
+        DEFAULT_TOP_LEVEL_NAMESPACES, getClassLoader(pluginLocation).get());
+  }
+
+  public static Optional<ClassLoader> getClassLoader(@Nullable Path pluginLocation)
+      throws IOException {
+    if (pluginLocation == null) {
+      return Optional.empty();
     } else {
-      URL url = (pluginLocation.toUri().toURL());
-      urls.add(url);
+      // first we load up classes from the classpath
+      File pluginDir = pluginLocation.toFile();
+      if (!pluginDir.exists()) {
+        throw new RuntimeException(
+            "Failed to find plugin directory "
+                + pluginDir.getAbsolutePath()
+                + ". Current directory is "
+                + new File(".").getAbsolutePath());
+      }
+      List<URL> urls = new ArrayList<URL>();
+      if (pluginDir.isDirectory()) {
+        List<Path> jarFiles =
+            Files.walk(pluginLocation)
+                .filter(Files::isRegularFile)
+                .filter(p -> p.toString().endsWith(".jar"))
+                .collect(Collectors.toList());
+        for (Path f : jarFiles) {
+          URL url = f.toUri().toURL();
+          if (url != null) {
+            urls.add(url);
+          }
+        }
+      } else {
+        URL url = (pluginLocation.toUri().toURL());
+        urls.add(url);
+      }
+      URL[] urlsArray = new URL[urls.size()];
+      urls.toArray(urlsArray);
+      URLClassLoader classLoader =
+          new URLClassLoader(urlsArray, Thread.currentThread().getContextClassLoader());
+      return Optional.of(classLoader);
     }
-    URL[] urlsArray = new URL[urls.size()];
-    urls.toArray(urlsArray);
-    URLClassLoader classLoader = new URLClassLoader(urlsArray, Thread.currentThread().getContextClassLoader());
-    return new DataSchemaFactory(DEFAULT_TOP_LEVEL_NAMESPACES, classLoader);
   }
 
   /**
-   * Construct a DataSchemaFactory with a custom class loader and a list of class namespaces to look for entities and aspects.
+   * Construct a DataSchemaFactory with a custom class loader and a list of class namespaces to look
+   * for entities and aspects.
    */
   public DataSchemaFactory(String[] classNamespaces, ClassLoader customClassLoader) {
     entitySchemas = new HashMap<>();
@@ -106,23 +130,80 @@ public class DataSchemaFactory {
     } else {
       standardClassLoader = Thread.currentThread().getContextClassLoader();
     }
+
     Set<Class<? extends RecordTemplate>> classes = new HashSet<>();
-    for (String namespace : classNamespaces) {
-      log.debug("Reflections scanning {} namespace", namespace);
-      Reflections reflections = new Reflections(namespace, customClassLoader);
+
+    // When using a custom classloader (especially URLClassLoader), we need to get URLs directly
+    if (customClassLoader instanceof URLClassLoader) {
+      URLClassLoader urlClassLoader = (URLClassLoader) customClassLoader;
+      URL[] urls = urlClassLoader.getURLs();
+
+      log.debug("Using URLClassLoader with {} URLs", urls.length);
+
+      // Create a single Reflections instance with all URLs
+      ConfigurationBuilder configBuilder =
+          new ConfigurationBuilder()
+              .setUrls(Arrays.asList(urls))
+              .addClassLoader(urlClassLoader)
+              .setScanners(new SubTypesScanner());
+
+      // Add packages separately to avoid issues
+      for (String pkg : classNamespaces) {
+        configBuilder.forPackages(pkg);
+      }
+
+      Reflections reflections = new Reflections(configBuilder);
       classes.addAll(reflections.getSubTypesOf(RecordTemplate.class));
+
+    } else {
+      // Fallback to the original approach for non-URLClassLoader
+      for (String namespace : classNamespaces) {
+        log.debug("Reflections scanning {} namespace", namespace);
+
+        // Use ClasspathHelper to get URLs for the package
+        Collection<URL> packageUrls = ClasspathHelper.forPackage(namespace, customClassLoader);
+
+        ConfigurationBuilder configBuilder =
+            new ConfigurationBuilder()
+                .setUrls(packageUrls)
+                .addClassLoader(customClassLoader)
+                .setScanners(new SubTypesScanner());
+
+        Reflections reflections = new Reflections(configBuilder);
+        classes.addAll(reflections.getSubTypesOf(RecordTemplate.class));
+      }
     }
+
     log.debug("Found a total of {} RecordTemplate classes", classes.size());
 
     if (standardClassLoader != null) {
       Set<Class<? extends RecordTemplate>> stdClasses = new HashSet<>();
-      for (String namespace : classNamespaces) {
-        Reflections reflections = new Reflections(namespace, standardClassLoader);
-        stdClasses.addAll(reflections.getSubTypesOf(RecordTemplate.class));
+      try {
+        for (String namespace : classNamespaces) {
+          // Use ClasspathHelper to properly get URLs for standard classloader
+          Collection<URL> packageUrls = ClasspathHelper.forPackage(namespace, standardClassLoader);
+
+          if (!packageUrls.isEmpty()) {
+            ConfigurationBuilder configBuilder =
+                new ConfigurationBuilder()
+                    .setUrls(packageUrls)
+                    .addClassLoader(standardClassLoader)
+                    .setScanners(new SubTypesScanner());
+
+            Reflections reflections = new Reflections(configBuilder);
+            stdClasses.addAll(reflections.getSubTypesOf(RecordTemplate.class));
+          }
+        }
+        log.debug(
+            "Standard ClassLoader found a total of {} RecordTemplate classes", stdClasses.size());
+        classes.removeAll(stdClasses);
+        log.debug("Finally found a total of {} RecordTemplate classes to inspect", classes.size());
+      } catch (Exception e) {
+        log.warn(
+            "Failed to scan with standard classloader, continuing with custom classloader results only",
+            e);
+        // Continue without removing standard classes - not critical for functionality
       }
-      log.debug("Standard ClassLoader found a total of {} RecordTemplate classes", stdClasses.size());
-      classes.removeAll(stdClasses);
-      log.debug("Finally found a total of {} RecordTemplate classes to inspect", classes.size());
     }
 
     for (Class recordClass : classes) {
@@ -135,15 +216,19 @@ public class DataSchemaFactory {
 
       if (schema != null) {
         DataSchema finalSchema = schema;
-        getName(schema, EntityAnnotation.ANNOTATION_NAME).ifPresent(
-            entityName -> entitySchemas.put(entityName, finalSchema));
-        getName(schema, AspectAnnotation.ANNOTATION_NAME).ifPresent(aspectName -> {
-          aspectSchemas.put(aspectName, finalSchema);
-          aspectClasses.put(aspectName, recordClass);
-        });
-        getName(schema, EventAnnotation.ANNOTATION_NAME).ifPresent(eventName -> {
-          eventSchemas.put(eventName, finalSchema);
-        });
+        getName(schema, EntityAnnotation.ANNOTATION_NAME)
+            .ifPresent(entityName -> entitySchemas.put(entityName, finalSchema));
+        getName(schema, AspectAnnotation.ANNOTATION_NAME)
+            .ifPresent(
+                aspectName -> {
+                  aspectSchemas.put(aspectName, finalSchema);
+                  aspectClasses.put(aspectName, recordClass);
+                });
+        getName(schema, EventAnnotation.ANNOTATION_NAME)
+            .ifPresent(
+                eventName -> {
+                  eventSchemas.put(eventName, finalSchema);
+                });
       }
     }
   }

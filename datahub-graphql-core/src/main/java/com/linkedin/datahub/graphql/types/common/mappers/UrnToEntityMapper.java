@@ -1,24 +1,34 @@
 package com.linkedin.datahub.graphql.types.common.mappers;
 
+import static com.linkedin.metadata.Constants.*;
+
 import com.linkedin.common.urn.Urn;
+import com.linkedin.datahub.graphql.QueryContext;
+import com.linkedin.datahub.graphql.generated.Application;
 import com.linkedin.datahub.graphql.generated.Assertion;
+import com.linkedin.datahub.graphql.generated.BusinessAttribute;
 import com.linkedin.datahub.graphql.generated.Chart;
 import com.linkedin.datahub.graphql.generated.Container;
 import com.linkedin.datahub.graphql.generated.CorpGroup;
 import com.linkedin.datahub.graphql.generated.CorpUser;
 import com.linkedin.datahub.graphql.generated.Dashboard;
 import com.linkedin.datahub.graphql.generated.DataFlow;
+import com.linkedin.datahub.graphql.generated.DataHubPageModule;
+import com.linkedin.datahub.graphql.generated.DataHubPageTemplate;
 import com.linkedin.datahub.graphql.generated.DataHubPolicy;
 import com.linkedin.datahub.graphql.generated.DataHubRole;
 import com.linkedin.datahub.graphql.generated.DataHubView;
 import com.linkedin.datahub.graphql.generated.DataJob;
 import com.linkedin.datahub.graphql.generated.DataPlatform;
 import com.linkedin.datahub.graphql.generated.DataPlatformInstance;
+import com.linkedin.datahub.graphql.generated.DataProcessInstance;
 import com.linkedin.datahub.graphql.generated.DataProduct;
 import com.linkedin.datahub.graphql.generated.Dataset;
 import com.linkedin.datahub.graphql.generated.Domain;
+import com.linkedin.datahub.graphql.generated.ERModelRelationship;
 import com.linkedin.datahub.graphql.generated.Entity;
 import com.linkedin.datahub.graphql.generated.EntityType;
+import com.linkedin.datahub.graphql.generated.Form;
 import com.linkedin.datahub.graphql.generated.GlossaryNode;
 import com.linkedin.datahub.graphql.generated.GlossaryTerm;
 import com.linkedin.datahub.graphql.generated.MLFeature;
@@ -28,25 +38,29 @@ import com.linkedin.datahub.graphql.generated.MLModelGroup;
 import com.linkedin.datahub.graphql.generated.MLPrimaryKey;
 import com.linkedin.datahub.graphql.generated.Notebook;
 import com.linkedin.datahub.graphql.generated.OwnershipTypeEntity;
+import com.linkedin.datahub.graphql.generated.Post;
+import com.linkedin.datahub.graphql.generated.QueryEntity;
+import com.linkedin.datahub.graphql.generated.Restricted;
 import com.linkedin.datahub.graphql.generated.Role;
 import com.linkedin.datahub.graphql.generated.SchemaFieldEntity;
+import com.linkedin.datahub.graphql.generated.StructuredPropertyEntity;
 import com.linkedin.datahub.graphql.generated.Tag;
 import com.linkedin.datahub.graphql.generated.Test;
+import com.linkedin.datahub.graphql.generated.VersionSet;
 import com.linkedin.datahub.graphql.types.mappers.ModelMapper;
 import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
 
-import static com.linkedin.metadata.Constants.*;
-
-
-public class UrnToEntityMapper implements ModelMapper<com.linkedin.common.urn.Urn, Entity>  {
+public class UrnToEntityMapper implements ModelMapper<com.linkedin.common.urn.Urn, Entity> {
   public static final UrnToEntityMapper INSTANCE = new UrnToEntityMapper();
 
-  public static Entity map(@Nonnull final com.linkedin.common.urn.Urn urn) {
-    return INSTANCE.apply(urn);
+  public static Entity map(
+      @Nullable QueryContext context, @Nonnull final com.linkedin.common.urn.Urn urn) {
+    return INSTANCE.apply(context, urn);
   }
 
   @Override
-  public Entity apply(Urn input) {
+  public Entity apply(@Nullable QueryContext context, Urn input) {
     Entity partialEntity = null;
     if (input.getEntityType().equals("dataset")) {
       partialEntity = new Dataset();
@@ -153,6 +167,11 @@ public class UrnToEntityMapper implements ModelMapper<com.linkedin.common.urn.Ur
       ((Domain) partialEntity).setUrn(input.toString());
       ((Domain) partialEntity).setType(EntityType.DOMAIN);
     }
+    if (input.getEntityType().equals("erModelRelationship")) {
+      partialEntity = new ERModelRelationship();
+      ((ERModelRelationship) partialEntity).setUrn(input.toString());
+      ((ERModelRelationship) partialEntity).setType(EntityType.ER_MODEL_RELATIONSHIP);
+    }
     if (input.getEntityType().equals("assertion")) {
       partialEntity = new Assertion();
       ((Assertion) partialEntity).setUrn(input.toString());
@@ -192,6 +211,61 @@ public class UrnToEntityMapper implements ModelMapper<com.linkedin.common.urn.Ur
       partialEntity = new OwnershipTypeEntity();
       ((OwnershipTypeEntity) partialEntity).setUrn(input.toString());
       ((OwnershipTypeEntity) partialEntity).setType(EntityType.CUSTOM_OWNERSHIP_TYPE);
+    }
+    if (input.getEntityType().equals(STRUCTURED_PROPERTY_ENTITY_NAME)) {
+      partialEntity = new StructuredPropertyEntity();
+      ((StructuredPropertyEntity) partialEntity).setUrn(input.toString());
+      ((StructuredPropertyEntity) partialEntity).setType(EntityType.STRUCTURED_PROPERTY);
+    }
+    if (input.getEntityType().equals(QUERY_ENTITY_NAME)) {
+      partialEntity = new QueryEntity();
+      ((QueryEntity) partialEntity).setUrn(input.toString());
+      ((QueryEntity) partialEntity).setType(EntityType.QUERY);
+    }
+    if (input.getEntityType().equals(RESTRICTED_ENTITY_NAME)) {
+      partialEntity = new Restricted();
+      ((Restricted) partialEntity).setUrn(input.toString());
+      ((Restricted) partialEntity).setType(EntityType.RESTRICTED);
+    }
+    if (input.getEntityType().equals(BUSINESS_ATTRIBUTE_ENTITY_NAME)) {
+      partialEntity = new BusinessAttribute();
+      ((BusinessAttribute) partialEntity).setUrn(input.toString());
+      ((BusinessAttribute) partialEntity).setType(EntityType.BUSINESS_ATTRIBUTE);
+    }
+    if (input.getEntityType().equals(FORM_ENTITY_NAME)) {
+      partialEntity = new Form();
+      ((Form) partialEntity).setUrn(input.toString());
+      ((Form) partialEntity).setType(EntityType.FORM);
+    }
+    if (input.getEntityType().equals(POST_ENTITY_NAME)) {
+      partialEntity = new Post();
+      ((Post) partialEntity).setUrn(input.toString());
+      ((Post) partialEntity).setType(EntityType.POST);
+    }
+    if (input.getEntityType().equals(DATA_PROCESS_INSTANCE_ENTITY_NAME)) {
+      partialEntity = new DataProcessInstance();
+      ((DataProcessInstance) partialEntity).setUrn(input.toString());
+      ((DataProcessInstance) partialEntity).setType(EntityType.DATA_PROCESS_INSTANCE);
+    }
+    if (input.getEntityType().equals(VERSION_SET_ENTITY_NAME)) {
+      partialEntity = new VersionSet();
+      ((VersionSet) partialEntity).setUrn(input.toString());
+      ((VersionSet) partialEntity).setType(EntityType.VERSION_SET);
+    }
+    if (input.getEntityType().equals(APPLICATION_ENTITY_NAME)) {
+      partialEntity = new Application();
+      ((Application) partialEntity).setUrn(input.toString());
+      ((Application) partialEntity).setType(EntityType.APPLICATION);
+    }
+    if (input.getEntityType().equals(DATAHUB_PAGE_TEMPLATE_ENTITY_NAME)) {
+      partialEntity = new DataHubPageTemplate();
+      ((DataHubPageTemplate) partialEntity).setUrn(input.toString());
+      ((DataHubPageTemplate) partialEntity).setType(EntityType.DATAHUB_PAGE_TEMPLATE);
+    }
+    if (input.getEntityType().equals(DATAHUB_PAGE_MODULE_ENTITY_NAME)) {
+      partialEntity = new DataHubPageModule();
+      ((DataHubPageModule) partialEntity).setUrn(input.toString());
+      ((DataHubPageModule) partialEntity).setType(EntityType.DATAHUB_PAGE_MODULE);
     }
     return partialEntity;
   }

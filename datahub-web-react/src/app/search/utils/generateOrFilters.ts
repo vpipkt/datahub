@@ -1,5 +1,6 @@
-import { FacetFilterInput, AndFilterInput } from '../../../types.generated';
-import { FILTER_DELIMITER, UnionType } from './constants';
+import { FILTER_DELIMITER, UnionType } from '@app/search/utils/constants';
+
+import { AndFilterInput, FacetFilterInput } from '@types';
 
 // Generates a list of AND filter inputs to be combined in orFilters. This is used when unionType is OR or AND.
 // When unionType = OR, pass in empty `filters` so the nested filters live alone in their AND statement.
@@ -26,20 +27,26 @@ function generateInputWithNestedFilters(filters: FacetFilterInput[], nestedFilte
 export function generateOrFilters(
     unionType: UnionType,
     filters: FacetFilterInput[],
-    nestedFilters: FacetFilterInput[] = [],
+    excludedFilterFields: string[] = [],
 ): AndFilterInput[] {
-    if ((filters?.length || 0) === 0 && nestedFilters.length === 0) {
+    if ((filters?.length || 0) === 0) {
         return [];
     }
+    const nonNestedFilters = filters.filter(
+        (f) => !f.field.includes(FILTER_DELIMITER) && !excludedFilterFields?.includes(f.field),
+    );
+    const nestedFilters = filters.filter(
+        (f) => f.field.includes(FILTER_DELIMITER) && !excludedFilterFields?.includes(f.field),
+    );
 
     if (unionType === UnionType.OR) {
         const orFiltersWithNestedFilters = generateInputWithNestedFilters([], nestedFilters);
-        const orFilters = filters.map((filter) => ({
+        const orFilters = nonNestedFilters.map((filter) => ({
             and: [filter],
         }));
         return [...orFilters, ...orFiltersWithNestedFilters];
     }
-    const andFiltersWithNestedFilters = generateInputWithNestedFilters(filters, nestedFilters);
+    const andFiltersWithNestedFilters = generateInputWithNestedFilters(nonNestedFilters, nestedFilters);
 
     if (andFiltersWithNestedFilters.length) {
         return andFiltersWithNestedFilters;
@@ -47,7 +54,7 @@ export function generateOrFilters(
 
     return [
         {
-            and: filters,
+            and: nonNestedFilters,
         },
     ];
 }

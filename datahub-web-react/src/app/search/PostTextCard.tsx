@@ -1,13 +1,14 @@
-import React from 'react';
 import { Typography } from 'antd';
+import React from 'react';
 import styled from 'styled-components/macro';
-import { ANTD_GRAY } from '../entity/shared/constants';
-import { Post } from '../../types.generated';
+
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+
+import { Post } from '@types';
 
 const CardContainer = styled.div`
     display: flex;
     flex-direction: row;
-    min-height: 140px;
     border: 1px solid ${ANTD_GRAY[4]};
     border-radius: 12px;
     box-shadow: ${(props) => props.theme.styles['box-shadow']};
@@ -15,6 +16,7 @@ const CardContainer = styled.div`
         box-shadow: ${(props) => props.theme.styles['box-shadow-hover']};
     }
     white-space: unset;
+    padding-bottom: 4px;
 `;
 
 const TextContainer = styled.div`
@@ -28,6 +30,9 @@ const TextContainer = styled.div`
 const TitleText = styled(Typography.Title)`
     word-break: break-word;
     min-height: 20px;
+    &&& {
+        margin-top: 8px;
+    }
 `;
 
 const HeaderText = styled(Typography.Text)`

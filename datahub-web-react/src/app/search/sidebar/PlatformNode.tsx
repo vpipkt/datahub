@@ -1,15 +1,8 @@
+import { Typography } from 'antd';
 import React from 'react';
 import styled from 'styled-components';
-import { Typography } from 'antd';
-import { formatNumber } from '../../shared/formatNumber';
-import ExpandableNode from './ExpandableNode';
-import { useEntityRegistry } from '../../useEntityRegistry';
-import { getFilterIconAndLabel } from '../filters/utils';
-import { BROWSE_PATH_V2_FILTER_NAME, PLATFORM_FILTER_NAME } from '../utils/constants';
-import useBrowsePagination from './useBrowsePagination';
-import BrowseNode from './BrowseNode';
-import SidebarLoadingError from './SidebarLoadingError';
-import useToggle from '../../shared/useToggle';
+
+import { getFilterIconAndLabel } from '@app/search/filters/utils';
 import {
     BrowseProvider,
     useEntityAggregation,
@@ -17,9 +10,18 @@ import {
     useMaybeEnvironmentAggregation,
     useOnSelectBrowsePath,
     usePlatformAggregation,
-} from './BrowseContext';
-import useSidebarAnalytics from './useSidebarAnalytics';
-import { useHasFilterField } from './SidebarContext';
+} from '@app/search/sidebar/BrowseContext';
+import BrowseNode from '@app/search/sidebar/BrowseNode';
+import ExpandableNode from '@app/search/sidebar/ExpandableNode';
+import { useHasFilterField } from '@app/search/sidebar/SidebarContext';
+import SidebarLoadingError from '@app/search/sidebar/SidebarLoadingError';
+import useBrowsePagination from '@app/search/sidebar/useBrowsePagination';
+import useSidebarAnalytics from '@app/search/sidebar/useSidebarAnalytics';
+import { SortBy, useSort } from '@app/search/sidebar/useSort';
+import { BROWSE_PATH_V2_FILTER_NAME, PLATFORM_FILTER_NAME } from '@app/search/utils/constants';
+import { formatNumber } from '@app/shared/formatNumber';
+import useToggle from '@app/shared/useToggle';
+import { useEntityRegistry } from '@app/useEntityRegistry';
 
 const PlatformIconContainer = styled.div`
     width: 16px;
@@ -33,7 +35,11 @@ const Count = styled(Typography.Text)`
     padding-right: 8px;
 `;
 
-const PlatformNode = () => {
+interface EntityNodeProps {
+    sortBy: string;
+}
+
+const PlatformNode: React.FC<EntityNodeProps> = ({ sortBy }) => {
     const isPlatformSelected = useIsPlatformSelected();
     const hasBrowseFilter = useHasFilterField(BROWSE_PATH_V2_FILTER_NAME);
     const isPlatformAndPathSelected = isPlatformSelected && hasBrowseFilter;
@@ -74,6 +80,9 @@ const PlatformNode = () => {
 
     const color = '#000';
 
+    const sortedGroups = useSort(groups, sortBy as SortBy);
+    console.log({ groups, sortedGroups });
+
     return (
         <ExpandableNode
             isOpen={isOpen && !isClosing && loaded}
@@ -101,7 +110,7 @@ const PlatformNode = () => {
             }
             body={
                 <ExpandableNode.Body>
-                    {groups.map((group) => (
+                    {sortedGroups.map((group) => (
                         <BrowseProvider
                             key={group.name}
                             entityAggregation={entityAggregation}
@@ -110,7 +119,7 @@ const PlatformNode = () => {
                             browseResultGroup={group}
                             parentPath={path}
                         >
-                            <BrowseNode />
+                            <BrowseNode sortBy={sortBy} />
                         </BrowseProvider>
                     ))}
                     {error && <SidebarLoadingError onClickRetry={retry} />}

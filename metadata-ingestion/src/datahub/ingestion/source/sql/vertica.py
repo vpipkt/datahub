@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
 import pydantic
+import pytest
 from pydantic.class_validators import validator
 from vertica_sqlalchemy_dialect.base import VerticaInspector
 
@@ -24,9 +25,13 @@ from datahub.ingestion.api.decorators import (
     support_status,
 )
 from datahub.ingestion.api.workunit import MetadataWorkUnit
+from datahub.ingestion.source.common.data_reader import DataReader
+from datahub.ingestion.source.common.subtypes import (
+    DatasetSubTypes,
+    SourceCapabilityModifier,
+)
 from datahub.ingestion.source.sql.sql_common import (
     SQLAlchemySource,
-    SQLSourceReport,
     SqlWorkUnit,
     get_schema_metadata,
 )
@@ -34,13 +39,13 @@ from datahub.ingestion.source.sql.sql_config import (
     BasicSQLAlchemyConfig,
     SQLCommonConfig,
 )
+from datahub.ingestion.source.sql.sql_report import SQLSourceReport
 from datahub.ingestion.source.sql.sql_utils import get_domain_wu
 from datahub.metadata.com.linkedin.pegasus2avro.common import StatusClass
 from datahub.metadata.com.linkedin.pegasus2avro.dataset import UpstreamLineage
 from datahub.metadata.com.linkedin.pegasus2avro.metadata.snapshot import DatasetSnapshot
 from datahub.metadata.com.linkedin.pegasus2avro.mxe import MetadataChangeEvent
 from datahub.metadata.schema_classes import (
-    ChangeTypeClass,
     DatasetLineageTypeClass,
     DatasetPropertiesClass,
     SubTypesClass,
@@ -51,7 +56,8 @@ from datahub.utilities import config_clean
 
 if TYPE_CHECKING:
     from datahub.ingestion.source.ge_data_profiler import GEProfilerRequest
-MISSING_COLUMN_INFO = "missing column information"
+
+pytestmark = pytest.mark.integration_batch_4
 logger: logging.Logger = logging.getLogger(__name__)
 
 
@@ -86,7 +92,7 @@ class VerticaConfig(BasicSQLAlchemyConfig):
         default=True, description="Whether Models should be ingested."
     )
 
-    include_view_lineage: Optional[bool] = pydantic.Field(
+    include_view_lineage: bool = pydantic.Field(
         default=True,
         description="If the source supports it, include view lineage to the underlying storage location.",
     )
@@ -113,16 +119,20 @@ class VerticaConfig(BasicSQLAlchemyConfig):
 @capability(
     SourceCapability.LINEAGE_COARSE,
     "Enabled by default, can be disabled via configuration `include_view_lineage` and `include_projection_lineage`",
+    subtype_modifier=[
+        SourceCapabilityModifier.VIEW,
+        SourceCapabilityModifier.PROJECTIONS,
+    ],
 )
 @capability(
     SourceCapability.DELETION_DETECTION,
-    "Optionally enabled via `stateful_ingestion.remove_stale_metadata`",
+    "Enabled by default via stateful ingestion",
     supported=True,
 )
 class VerticaSource(SQLAlchemySource):
     def __init__(self, config: VerticaConfig, ctx: PipelineContext):
         # self.platform = platform
-        super(VerticaSource, self).__init__(config, ctx, "vertica")
+        super().__init__(config, ctx, "vertica")
         self.report: SQLSourceReport = VerticaSourceReport()
         self.config: VerticaConfig = config
 
@@ -132,17 +142,8 @@ class VerticaSource(SQLAlchemySource):
         return cls(config, ctx)
 
     def get_workunits_internal(self) -> Iterable[Union[MetadataWorkUnit, SqlWorkUnit]]:
+        yield from super().get_workunits_internal()
         sql_config = self.config
-        if logger.isEnabledFor(logging.DEBUG):
-            # If debug logging is enabled, we also want to echo each SQL query issued.
-            sql_config.options.setdefault("echo", True)
-
-        # Extra default SQLAlchemy option for better connection pooling and threading.
-        # https://docs.sqlalchemy.org/en/14/core/pooling.html#sqlalchemy.pool.QueuePool.params.max_overflow
-        if sql_config.is_profiling_enabled():
-            sql_config.options.setdefault(
-                "max_overflow", sql_config.profiling.max_workers
-            )
 
         for inspector in self.get_inspectors():
             profiler = None
@@ -169,11 +170,6 @@ class VerticaSource(SQLAlchemySource):
                     ),
                 )
 
-                if sql_config.include_tables:
-                    yield from self.loop_tables(inspector, schema, sql_config)
-
-                if sql_config.include_views:
-                    yield from self.loop_views(inspector, schema, sql_config)
                 if sql_config.include_projections:
                     yield from self.loop_projections(inspector, schema, sql_config)
                 if sql_config.include_models:
@@ -188,6 +184,15 @@ class VerticaSource(SQLAlchemySource):
                 yield from self.loop_profiler(
                     profile_requests, profiler, platform=self.platform
                 )
+
+    def get_identifier(
+        self, *, schema: str, entity: str, inspector: VerticaInspector, **kwargs: Any
+    ) -> str:
+        regular = f"{schema}.{entity}"
+        if self.config.database:
+            return f"{self.config.database}.{regular}"
+        current_database = self.get_db_name(inspector)
+        return f"{current_database}.{regular}"
 
     def get_database_properties(
         self, inspector: VerticaInspector, database: str
@@ -221,6 +226,7 @@ class VerticaSource(SQLAlchemySource):
         schema: str,
         table: str,
         sql_config: SQLCommonConfig,
+        data_reader: Optional[DataReader],
     ) -> Iterable[Union[SqlWorkUnit, MetadataWorkUnit]]:
         dataset_urn = make_dataset_urn_with_platform_instance(
             self.platform,
@@ -235,7 +241,7 @@ class VerticaSource(SQLAlchemySource):
             owner_urn=f"urn:li:corpuser:{table_owner}",
         )
         yield from super()._process_table(
-            dataset_name, inspector, schema, table, sql_config
+            dataset_name, inspector, schema, table, sql_config, data_reader
         )
 
     def loop_views(
@@ -473,7 +479,12 @@ class VerticaSource(SQLAlchemySource):
         foreign_keys = self._get_foreign_keys(
             dataset_urn, inspector, schema, projection
         )
-        schema_fields = self.get_schema_fields(dataset_name, columns, pk_constraints)
+        schema_fields = self.get_schema_fields(
+            dataset_name,
+            columns,
+            inspector,
+            pk_constraints,
+        )
         schema_metadata = get_schema_metadata(
             self.report,
             dataset_name,
@@ -492,11 +503,8 @@ class VerticaSource(SQLAlchemySource):
         if dpi_aspect:
             yield dpi_aspect
         yield MetadataChangeProposalWrapper(
-            entityType="dataset",
-            changeType=ChangeTypeClass.UPSERT,
             entityUrn=dataset_urn,
-            aspectName="subTypes",
-            aspect=SubTypesClass(typeNames=["Projections"]),
+            aspect=SubTypesClass(typeNames=[DatasetSubTypes.PROJECTIONS]),
         ).as_workunit()
 
         if self.config.domain:
@@ -535,7 +543,7 @@ class VerticaSource(SQLAlchemySource):
             )
 
             if not self.is_dataset_eligible_for_profiling(
-                dataset_name, sql_config, inspector, profile_candidates
+                dataset_name, schema, inspector, profile_candidates
             ):
                 if self.config.profiling.report_dropped_profiles:
                     self.report.report_dropped(f"profile of {dataset_name}")
@@ -545,12 +553,7 @@ class VerticaSource(SQLAlchemySource):
             else:
                 logger.debug(f"{dataset_name} has already been seen, skipping...")
                 continue
-            missing_column_info_warn = self.report.warnings.get(MISSING_COLUMN_INFO)
-            if (
-                missing_column_info_warn is not None
-                and dataset_name in missing_column_info_warn
-            ):
-                continue
+
             (partition, custom_sql) = self.generate_partition_profiler_query(
                 schema, projection, self.config.profiling.partition_datetime
             )
@@ -682,7 +685,7 @@ class VerticaSource(SQLAlchemySource):
         )
         dataset_snapshot.aspects.append(dataset_properties)
 
-        schema_fields = self.get_schema_fields(dataset_name, columns)
+        schema_fields = self.get_schema_fields(dataset_name, columns, inspector)
 
         schema_metadata = get_schema_metadata(
             self.report,

@@ -1,7 +1,7 @@
-from enum import Enum
+from datahub.utilities.str_enum import StrEnum
 
 
-class SnowflakeCloudProvider(str, Enum):
+class SnowflakeCloudProvider(StrEnum):
     AWS = "aws"
     GCP = "gcp"
     AZURE = "azure"
@@ -9,8 +9,10 @@ class SnowflakeCloudProvider(str, Enum):
 
 SNOWFLAKE_DEFAULT_CLOUD = SnowflakeCloudProvider.AWS
 
+DEFAULT_SNOWFLAKE_DOMAIN = "snowflakecomputing.com"
 
-class SnowflakeEdition(str, Enum):
+
+class SnowflakeEdition(StrEnum):
     STANDARD = "Standard"
 
     # We use this to represent Enterprise Edition or higher
@@ -44,7 +46,7 @@ SNOWFLAKE_DATABASE = "SNOWFLAKE"
 
 # We will always compare with lowercase
 # Complete list for objectDomain - https://docs.snowflake.com/en/sql-reference/account-usage/access_history.html
-class SnowflakeObjectDomain(str, Enum):
+class SnowflakeObjectDomain(StrEnum):
     TABLE = "table"
     EXTERNAL_TABLE = "external table"
     VIEW = "view"
@@ -52,6 +54,10 @@ class SnowflakeObjectDomain(str, Enum):
     DATABASE = "database"
     SCHEMA = "schema"
     COLUMN = "column"
+    ICEBERG_TABLE = "iceberg table"
+    STREAM = "stream"
+    PROCEDURE = "procedure"
+    DYNAMIC_TABLE = "dynamic table"
 
 
 GENERIC_PERMISSION_ERROR_KEY = "permission-error"

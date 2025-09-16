@@ -9,11 +9,22 @@ Welcome to DataHub Python SDK's documentation!
 .. toctree::
    :titlesonly:
 
-   cli
+   apidocs/sdk-v2/main-client
+   apidocs/sdk-v2/entity-client
+   apidocs/sdk-v2/lineage-client
+   apidocs/sdk-v2/search-client
+   apidocs/sdk-v2/resolver-client
+   apidocs/sdk-v2/entities
 
-   apidocs/builder
-   apidocs/clients
+   apidocs/builder/mce-builder
+   apidocs/builder/mcp-builder
+
+   apidocs/clients/graph-client
+   apidocs/clients/kafka-emitter
+   apidocs/clients/rest-emitter
+
    apidocs/models
+   apidocs/urns
 
 
 Indices and tables

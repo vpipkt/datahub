@@ -1,23 +1,15 @@
 import logging
 from dataclasses import dataclass, field
-from typing import (
-    TYPE_CHECKING,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    Optional,
-    Set,
-    Union,
-    cast,
-)
+from typing import Callable, Dict, Iterable, List, Optional, Set, cast
 
 import datahub.emitter.mce_builder as builder
+from datahub.emitter.generic_emitter import Emitter
 from datahub.emitter.mcp import MetadataChangeProposalWrapper
 from datahub.metadata.schema_classes import (
     AuditStampClass,
     DataFlowInfoClass,
     DataFlowSnapshotClass,
+    DataPlatformInstanceClass,
     GlobalTagsClass,
     MetadataChangeEventClass,
     OwnerClass,
@@ -25,13 +17,10 @@ from datahub.metadata.schema_classes import (
     OwnershipSourceClass,
     OwnershipSourceTypeClass,
     OwnershipTypeClass,
+    StatusClass,
     TagAssociationClass,
 )
 from datahub.utilities.urns.data_flow_urn import DataFlowUrn
-
-if TYPE_CHECKING:
-    from datahub.emitter.kafka_emitter import DatahubKafkaEmitter
-    from datahub.emitter.rest_emitter import DatahubRestEmitter
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +30,7 @@ class DataFlow:
     """The DataHub representation of data-flow.
 
     Args:
-        urn (int): Unique identifier of the DataFlow in DataHub. For more detail refer https://datahubproject.io/docs/what/urn/.
+        urn (int): Unique identifier of the DataFlow in DataHub. For more detail refer https://docs.datahub.com/docs/what/urn/.
         id (str): Identifier of DataFlow in orchestrator.
         orchestrator (str): orchestrator. for example airflow.
         cluster (Optional[str]): [deprecated] Please use env.
@@ -51,8 +40,8 @@ class DataFlow:
         url (Optional[str]): URL pointing to DataFlow.
         tags (Set[str]): tags that need to be apply on DataFlow.
         owners (Set[str]): owners that need to be apply on DataFlow.
-        platform_instance (Optional[str]): The instance of the platform that all assets produced by this orchestrator belong to. For more detail refer https://datahubproject.io/docs/platform-instances/.
-        env (Optional[str]): The environment that all assets produced by this orchestrator belong to. For more detail and possible values refer https://datahubproject.io/docs/graphql/enums/#fabrictype.
+        platform_instance (Optional[str]): The instance of the platform that all assets produced by this orchestrator belong to. For more detail refer https://docs.datahub.com/docs/platform-instances/.
+        env (Optional[str]): The environment that all assets produced by this orchestrator belong to. For more detail and possible values refer https://docs.datahub.com/docs/graphql/enums/#fabrictype.
     """
 
     urn: DataFlowUrn = field(init=False)
@@ -65,6 +54,7 @@ class DataFlow:
     url: Optional[str] = None
     tags: Set[str] = field(default_factory=set)
     owners: Set[str] = field(default_factory=set)
+    group_owners: Set[str] = field(default_factory=set)
     platform_instance: Optional[str] = None
     env: Optional[str] = None
 
@@ -92,17 +82,20 @@ class DataFlow:
         )
 
     def generate_ownership_aspect(self):
+        owners = {builder.make_user_urn(owner) for owner in self.owners} | {
+            builder.make_group_urn(owner) for owner in self.group_owners
+        }
         ownership = OwnershipClass(
             owners=[
                 OwnerClass(
-                    owner=builder.make_user_urn(owner),
+                    owner=urn,
                     type=OwnershipTypeClass.DEVELOPER,
                     source=OwnershipSourceClass(
                         type=OwnershipSourceTypeClass.SERVICE,
                         # url=dag.filepath,
                     ),
                 )
-                for owner in (self.owners or [])
+                for urn in (owners or [])
             ],
             lastModified=AuditStampClass(
                 time=0, actor=builder.make_user_urn(self.orchestrator)
@@ -119,7 +112,18 @@ class DataFlow:
         )
         return [tags]
 
+    def _get_env(self) -> Optional[str]:
+        env: Optional[str] = None
+        if self.env and self.env.upper() in builder.ALL_ENV_TYPES:
+            env = self.env.upper()
+        else:
+            logger.debug(
+                f"{self.env} is not a valid environment type so Environment filter won't work."
+            )
+        return env
+
     def generate_mce(self) -> MetadataChangeEventClass:
+        env = self._get_env()
         flow_mce = MetadataChangeEventClass(
             proposedSnapshot=DataFlowSnapshotClass(
                 urn=str(self.urn),
@@ -129,6 +133,7 @@ class DataFlow:
                         description=self.description,
                         customProperties=self.properties,
                         externalUrl=self.url,
+                        env=env,
                     ),
                     *self.generate_ownership_aspect(),
                     *self.generate_tags_aspect(),
@@ -139,6 +144,7 @@ class DataFlow:
         return flow_mce
 
     def generate_mcp(self) -> Iterable[MetadataChangeProposalWrapper]:
+        env = self._get_env()
         mcp = MetadataChangeProposalWrapper(
             entityUrn=str(self.urn),
             aspect=DataFlowInfoClass(
@@ -146,9 +152,32 @@ class DataFlow:
                 description=self.description,
                 customProperties=self.properties,
                 externalUrl=self.url,
+                env=env,
             ),
         )
         yield mcp
+
+        mcp = MetadataChangeProposalWrapper(
+            entityUrn=str(self.urn),
+            aspect=StatusClass(
+                removed=False,
+            ),
+        )
+        yield mcp
+
+        if self.platform_instance:
+            instance = builder.make_dataplatform_instance_urn(
+                platform=self.orchestrator,
+                instance=self.platform_instance,
+            )
+            mcp = MetadataChangeProposalWrapper(
+                entityUrn=str(self.urn),
+                aspect=DataPlatformInstanceClass(
+                    platform=builder.make_data_platform_urn(self.orchestrator),
+                    instance=instance,
+                ),
+            )
+            yield mcp
 
         for owner in self.generate_ownership_aspect():
             mcp = MetadataChangeProposalWrapper(
@@ -166,7 +195,7 @@ class DataFlow:
 
     def emit(
         self,
-        emitter: Union["DatahubRestEmitter", "DatahubKafkaEmitter"],
+        emitter: Emitter,
         callback: Optional[Callable[[Exception, str], None]] = None,
     ) -> None:
         """

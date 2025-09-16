@@ -1,19 +1,9 @@
-import React from 'react';
 import { render } from '@testing-library/react';
-import UserHeader from '../UserHeader';
+import React from 'react';
+
+import UserHeader from '@app/entity/user/UserHeader';
 
 describe('UserHeader', () => {
-    it('renders', () => {
-        render(
-            <UserHeader
-                name="Jane Doe"
-                title="Software Engineer"
-                skills={['Pandas', 'Multivariate Calculus', 'Juggling']}
-                teams={['Product', 'Data Science']}
-                email="jane@datahub.ui"
-            />,
-        );
-    });
     it('renders name, title, skills, teams and email', () => {
         const { getByText } = render(
             <UserHeader

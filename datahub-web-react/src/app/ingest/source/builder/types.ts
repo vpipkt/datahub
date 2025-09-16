@@ -1,4 +1,7 @@
-import { IngestionSourceBuilderStep } from './steps';
+import { IngestionSourceBuilderStep } from '@app/ingest/source/builder/steps';
+import { PendingOwner } from '@app/sharedV2/owners/OwnersSection';
+
+import { IngestionSource } from '@types';
 
 /**
  * The size of the builder modal
@@ -18,6 +21,7 @@ export interface SourceConfig {
     name: string;
     displayName: string;
     docsUrl: string;
+    description?: string;
     recipe: string;
 }
 
@@ -32,6 +36,21 @@ export type StepProps = {
     submit: (shouldRun?: boolean) => void;
     cancel: () => void;
     ingestionSources: SourceConfig[];
+    isEditing: boolean;
+    sourceRefetch?: () => Promise<any>;
+    selectedSource?: IngestionSource;
+};
+
+export type StringMapEntryInput = {
+    /**
+     * The key of the map entry
+     */
+    key: string;
+
+    /**
+     * The value fo the map entry
+     */
+    value: string;
 };
 
 /**
@@ -91,5 +110,14 @@ export interface SourceBuilderState {
          * Advanced: Whether or not to run this ingestion source in debug mode
          */
         debugMode?: boolean | null;
+
+        /**
+         * Advanced: Extra arguments for the ingestion run.
+         */
+        extraArgs?: StringMapEntryInput[] | null;
     };
+    /**
+     * Owners of the Ingestion source
+     */
+    owners?: PendingOwner[];
 }

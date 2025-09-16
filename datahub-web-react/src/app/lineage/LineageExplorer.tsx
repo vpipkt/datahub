@@ -1,28 +1,28 @@
+import { InfoCircleOutlined } from '@ant-design/icons';
+import { Button, Drawer } from 'antd';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useHistory } from 'react-router';
-import { Button, Drawer } from 'antd';
-import { InfoCircleOutlined } from '@ant-design/icons';
 import styled from 'styled-components';
-import { Message } from '../shared/Message';
-import { useEntityRegistry } from '../useEntityRegistry';
-import CompactContext from '../shared/CompactContext';
-import { EntityAndType, EntitySelectParams, FetchedEntities } from './types';
-import LineageViz from './LineageViz';
-import extendAsyncEntities from './utils/extendAsyncEntities';
-import { EntityType } from '../../types.generated';
-import { ANTD_GRAY } from '../entity/shared/constants';
-import { GetEntityLineageQuery, useGetEntityLineageQuery } from '../../graphql/lineage.generated';
-import { useIsSeparateSiblingsMode } from '../entity/shared/siblingUtils';
-import { SHOW_COLUMNS_URL_PARAMS, useIsShowColumnsMode } from './utils/useIsShowColumnsMode';
-import { ErrorSection } from '../shared/error/ErrorSection';
-import usePrevious from '../shared/usePrevious';
-import { useGetLineageTimeParams } from './utils/useGetLineageTimeParams';
+
+import analytics, { EventType } from '@app/analytics';
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+import { useIsSeparateSiblingsMode } from '@app/entity/shared/siblingUtils';
+import LineageLoadingSection from '@app/lineage/LineageLoadingSection';
+import LineageViz from '@app/lineage/LineageViz';
+import { EntityAndType, EntitySelectParams, FetchedEntities } from '@app/lineage/types';
+import extendAsyncEntities from '@app/lineage/utils/extendAsyncEntities';
+import { useGetLineageTimeParams } from '@app/lineage/utils/useGetLineageTimeParams';
+import { SHOW_COLUMNS_URL_PARAMS, useIsShowColumnsMode } from '@app/lineage/utils/useIsShowColumnsMode';
+import CompactContext from '@app/shared/CompactContext';
+import { ErrorSection } from '@app/shared/error/ErrorSection';
+import usePrevious from '@app/shared/usePrevious';
+import { useEntityRegistry } from '@app/useEntityRegistry';
+
+import { GetEntityLineageQuery, useGetEntityLineageQuery } from '@graphql/lineage.generated';
+import { EntityType } from '@types';
 
 const DEFAULT_DISTANCE_FROM_TOP = 106;
 
-const LoadingMessage = styled(Message)`
-    margin-top: 10%;
-`;
 const FooterButtonGroup = styled.div`
     display: flex;
     justify-content: space-between;
@@ -79,17 +79,28 @@ export default function LineageExplorer({ urn, type }: Props) {
 
     const [isDrawerVisible, setIsDrawVisible] = useState(false);
     const [selectedEntity, setSelectedEntity] = useState<EntitySelectParams | undefined>(undefined);
-    const [asyncEntities, setAsyncEntities] = useState<FetchedEntities>({});
+    const [asyncEntities, setAsyncEntities] = useState<FetchedEntities>(new Map());
 
     // In the case that any URL params change, we want to reset asyncEntities. If new parameters are added,
     // they should be added to the dependency array below.
     useEffect(() => {
-        setAsyncEntities({});
-    }, [isHideSiblingMode, startTimeMillis, endTimeMillis]);
+        setAsyncEntities(new Map());
+        // this can also be our hook for emitting the tracking event
+
+        if (entityData?.type) {
+            analytics.event({
+                type: EventType.VisualLineageViewEvent,
+                entityType: entityData.type,
+                numUpstreams: 0,
+                numDownstreams: 0,
+                hasColumnLevelLineage: false,
+            });
+        }
+    }, [isHideSiblingMode, startTimeMillis, endTimeMillis, entityData?.type]);
 
     useEffect(() => {
         if (showColumns) {
-            setAsyncEntities({});
+            setAsyncEntities(new Map());
         }
     }, [showColumns]);
 
@@ -97,7 +108,7 @@ export default function LineageExplorer({ urn, type }: Props) {
 
     const maybeAddAsyncLoadedEntity = useCallback(
         (entityAndType: EntityAndType) => {
-            if (entityAndType?.entity.urn && !asyncEntities[entityAndType?.entity.urn]?.fullyFetched) {
+            if (entityAndType?.entity?.urn && !asyncEntities.get(entityAndType?.entity?.urn)?.fullyFetched) {
                 // record that we have added this entity
                 let newAsyncEntities = extendAsyncEntities(
                     fineGrainedMap,
@@ -109,26 +120,30 @@ export default function LineageExplorer({ urn, type }: Props) {
                 );
                 const config = entityRegistry.getLineageVizConfig(entityAndType.type, entityAndType.entity);
 
-                config?.downstreamChildren?.forEach((downstream) => {
-                    newAsyncEntities = extendAsyncEntities(
-                        fineGrainedMap,
-                        fineGrainedMapForSiblings,
-                        newAsyncEntities,
-                        entityRegistry,
-                        downstream,
-                        false,
-                    );
-                });
-                config?.upstreamChildren?.forEach((downstream) => {
-                    newAsyncEntities = extendAsyncEntities(
-                        fineGrainedMap,
-                        fineGrainedMapForSiblings,
-                        newAsyncEntities,
-                        entityRegistry,
-                        downstream,
-                        false,
-                    );
-                });
+                config?.downstreamChildren
+                    ?.filter((child) => child.type)
+                    ?.forEach((downstream) => {
+                        newAsyncEntities = extendAsyncEntities(
+                            fineGrainedMap,
+                            fineGrainedMapForSiblings,
+                            newAsyncEntities,
+                            entityRegistry,
+                            downstream,
+                            false,
+                        );
+                    });
+                config?.upstreamChildren
+                    ?.filter((child) => child.type)
+                    ?.forEach((downstream) => {
+                        newAsyncEntities = extendAsyncEntities(
+                            fineGrainedMap,
+                            fineGrainedMapForSiblings,
+                            newAsyncEntities,
+                            entityRegistry,
+                            downstream,
+                            false,
+                        );
+                    });
                 setAsyncEntities(newAsyncEntities);
             }
         },
@@ -137,10 +152,10 @@ export default function LineageExplorer({ urn, type }: Props) {
 
     // set asyncEntity to have fullyFetched: false so we can update it in maybeAddAsyncLoadedEntity
     function resetAsyncEntity(entityUrn: string) {
-        setAsyncEntities({
-            ...asyncEntities,
-            [entityUrn]: { ...asyncEntities[entityUrn], fullyFetched: false },
-        });
+        const newAsyncEntities = new Map(asyncEntities);
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        newAsyncEntities.set(entityUrn, { ...asyncEntities.get(entityUrn)!, fullyFetched: false });
+        setAsyncEntities(newAsyncEntities);
     }
 
     const handleClose = () => {
@@ -160,7 +175,7 @@ export default function LineageExplorer({ urn, type }: Props) {
     return (
         <>
             {error && <ErrorSection />}
-            {loading && <LoadingMessage type="loading" content="Loading..." />}
+            {loading && <LineageLoadingSection />}
             {!!data && (
                 <div>
                     <LineageViz
@@ -183,6 +198,10 @@ export default function LineageExplorer({ urn, type }: Props) {
                         onLineageExpand={(asyncData: EntityAndType) => {
                             resetAsyncEntity(asyncData.entity.urn);
                             maybeAddAsyncLoadedEntity(asyncData);
+                            analytics.event({
+                                type: EventType.VisualLineageExpandGraphEvent,
+                                targetEntityType: asyncData?.type,
+                            });
                         }}
                         refetchCenterNode={() => {
                             refetch().then(() => {
@@ -198,7 +217,7 @@ export default function LineageExplorer({ urn, type }: Props) {
                 placement="left"
                 closable={false}
                 onClose={handleClose}
-                visible={isDrawerVisible}
+                open={isDrawerVisible}
                 width={490}
                 bodyStyle={{ overflowX: 'hidden' }}
                 mask={false}
@@ -208,9 +227,13 @@ export default function LineageExplorer({ urn, type }: Props) {
                             <Button onClick={handleClose} type="text">
                                 Close
                             </Button>
-                            <Button href={entityRegistry.getEntityUrl(selectedEntity.type, selectedEntity.urn)}>
-                                <InfoCircleOutlined /> {entityRegistry.getEntityName(selectedEntity.type)} Details
-                            </Button>
+                            {selectedEntity.type !== EntityType.Restricted && (
+                                <Button
+                                    href={`${entityRegistry.getEntityUrl(selectedEntity.type, selectedEntity.urn)}`}
+                                >
+                                    <InfoCircleOutlined /> View details
+                                </Button>
+                            )}
                         </FooterButtonGroup>
                     )
                 }

@@ -1,9 +1,10 @@
-import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react';
 import { MockedProvider } from '@apollo/client/testing';
-import SchemaDescriptionField from '../schema/components/SchemaDescriptionField';
-import TestPageContainer from '../../../../../utils/test-utils/TestPageContainer';
-import { mocks } from '../../../../../Mocks';
+import { fireEvent, render, waitFor } from '@testing-library/react';
+import React from 'react';
+
+import SchemaDescriptionField from '@app/entity/dataset/profile/schema/components/SchemaDescriptionField';
+import { mocks } from '@src/Mocks';
+import TestPageContainer from '@utils/test-utils/TestPageContainer';
 
 describe('SchemaDescriptionField', () => {
     it('renders editable description', async () => {
@@ -68,7 +69,7 @@ describe('SchemaDescriptionField', () => {
         const longDescription =
             'really long description over 80 characters, really long description over 80 characters, really long description over 80 characters, really long description over 80 characters, really long description over 80 characters';
         it('renders longer messages with show more when not expanded', () => {
-            const onClick = jest.fn();
+            const onClick = vi.fn();
             const { getByText, queryByText } = render(
                 <SchemaDescriptionField
                     expanded={false}
@@ -84,7 +85,7 @@ describe('SchemaDescriptionField', () => {
         });
 
         it('renders longer messages with show less when expanded', () => {
-            const onClick = jest.fn();
+            const onClick = vi.fn();
             const { getByText } = render(
                 <SchemaDescriptionField
                     expanded

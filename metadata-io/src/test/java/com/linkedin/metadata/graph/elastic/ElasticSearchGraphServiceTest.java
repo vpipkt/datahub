@@ -1,376 +1,387 @@
 package com.linkedin.metadata.graph.elastic;
 
-import com.linkedin.metadata.config.search.GraphQueryConfiguration;
-import com.linkedin.common.FabricType;
-import com.linkedin.common.urn.DataPlatformUrn;
-import com.linkedin.common.urn.DatasetUrn;
-import com.linkedin.common.urn.TagUrn;
+import static io.datahubproject.test.search.SearchTestUtils.TEST_GRAPH_SERVICE_CONFIG;
+import static org.junit.Assert.assertNull;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.testng.Assert.assertEquals;
+import static org.testng.Assert.assertTrue;
+
 import com.linkedin.common.urn.Urn;
-import com.linkedin.metadata.ESTestConfiguration;
-import com.linkedin.metadata.graph.Edge;
-import com.linkedin.metadata.graph.EntityLineageResult;
-import com.linkedin.metadata.graph.GraphService;
-import com.linkedin.metadata.graph.GraphServiceTestBase;
-import com.linkedin.metadata.graph.LineageDirection;
+import com.linkedin.common.urn.UrnUtils;
+import com.linkedin.metadata.aspect.models.graph.EdgeUrnType;
+import com.linkedin.metadata.aspect.models.graph.RelatedEntities;
+import com.linkedin.metadata.aspect.models.graph.RelatedEntitiesScrollResult;
+import com.linkedin.metadata.entity.TestEntityRegistry;
+import com.linkedin.metadata.graph.GraphFilters;
+import com.linkedin.metadata.graph.GraphService.EdgeTuple;
 import com.linkedin.metadata.graph.RelatedEntitiesResult;
-import com.linkedin.metadata.graph.RelatedEntity;
+import com.linkedin.metadata.models.registry.EntityRegistry;
 import com.linkedin.metadata.models.registry.LineageRegistry;
-import com.linkedin.metadata.models.registry.SnapshotEntityRegistry;
-import com.linkedin.metadata.query.filter.Filter;
-import com.linkedin.metadata.query.filter.RelationshipDirection;
-import com.linkedin.metadata.query.filter.RelationshipFilter;
+import com.linkedin.metadata.query.filter.SortCriterion;
 import com.linkedin.metadata.search.elasticsearch.indexbuilder.ESIndexBuilder;
 import com.linkedin.metadata.search.elasticsearch.update.ESBulkProcessor;
-import com.linkedin.metadata.utils.elasticsearch.IndexConvention;
 import com.linkedin.metadata.utils.elasticsearch.IndexConventionImpl;
+import io.datahubproject.metadata.context.OperationContext;
+import io.datahubproject.test.metadata.context.TestOperationContexts;
 import java.util.Arrays;
 import java.util.Collections;
-import org.elasticsearch.client.RestHighLevelClient;
-import org.junit.Assert;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.Import;
-import org.testng.SkipException;
-import org.testng.annotations.BeforeClass;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import org.apache.lucene.search.TotalHits;
+import org.mockito.ArgumentCaptor;
+import org.opensearch.action.search.SearchRequest;
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.ExistsQueryBuilder;
+import org.opensearch.index.query.QueryBuilder;
+import org.opensearch.index.query.TermQueryBuilder;
+import org.opensearch.script.Script;
+import org.opensearch.search.SearchHit;
+import org.opensearch.search.SearchHits;
 import org.testng.annotations.BeforeMethod;
+import org.testng.annotations.BeforeTest;
 import org.testng.annotations.Test;
 
-import javax.annotation.Nonnull;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.List;
+public class ElasticSearchGraphServiceTest {
 
-import static com.linkedin.metadata.graph.elastic.ElasticSearchGraphService.INDEX_NAME;
-import static com.linkedin.metadata.search.utils.QueryUtils.*;
-import static org.testng.Assert.assertEquals;
+  private ElasticSearchGraphService test;
+  private ESBulkProcessor mockESBulkProcessor;
+  private ESGraphWriteDAO mockWriteDAO;
+  private ESGraphQueryDAO mockReadDAO;
 
-@Import(ESTestConfiguration.class)
-public class ElasticSearchGraphServiceTest extends GraphServiceTestBase {
+  @BeforeTest
+  public void beforeTest() {
+    EntityRegistry entityRegistry = new TestEntityRegistry();
+    mockESBulkProcessor = mock(ESBulkProcessor.class);
+    mockWriteDAO = mock(ESGraphWriteDAO.class);
+    mockReadDAO = mock(ESGraphQueryDAO.class);
 
-  @Autowired
-  private RestHighLevelClient _searchClient;
-  @Autowired
-  private ESBulkProcessor _bulkProcessor;
-  @Autowired
-  private ESIndexBuilder _esIndexBuilder;
-
-  private final IndexConvention _indexConvention = new IndexConventionImpl(null);
-  private final String _indexName = _indexConvention.getIndexName(INDEX_NAME);
-  private ElasticSearchGraphService _client;
-
-  private static final String TAG_RELATIONSHIP = "SchemaFieldTaggedWith";
-
-  @BeforeClass
-  public void setup() {
-    _client = buildService();
-    _client.configure();
+    test =
+        new ElasticSearchGraphService(
+            new LineageRegistry(entityRegistry),
+            mockESBulkProcessor,
+            IndexConventionImpl.noPrefix("md5"),
+            mockWriteDAO,
+            mockReadDAO,
+            mock(ESIndexBuilder.class),
+            "md5");
   }
 
   @BeforeMethod
-  public void wipe() throws Exception {
-    _client.clear();
-    syncAfterWrite();
-  }
-
-  @Nonnull
-  private ElasticSearchGraphService buildService() {
-    LineageRegistry lineageRegistry = new LineageRegistry(SnapshotEntityRegistry.getInstance());
-    ESGraphQueryDAO readDAO = new ESGraphQueryDAO(_searchClient, lineageRegistry, _indexConvention, GraphQueryConfiguration.testDefaults);
-    ESGraphWriteDAO writeDAO = new ESGraphWriteDAO(_indexConvention, _bulkProcessor, 1);
-    return new ElasticSearchGraphService(lineageRegistry, _bulkProcessor, _indexConvention, writeDAO, readDAO,
-        _esIndexBuilder);
-  }
-
-  @Override
-  @Nonnull
-  protected GraphService getGraphService() {
-    return _client;
-  }
-
-  @Override
-  protected void syncAfterWrite() throws Exception {
-    ESTestConfiguration.syncAfterWrite(_bulkProcessor);
-  }
-
-  @Override
-  protected void assertEqualsAnyOrder(RelatedEntitiesResult actual, RelatedEntitiesResult expected) {
-    // https://github.com/datahub-project/datahub/issues/3115
-    // ElasticSearchGraphService produces duplicates, which is here ignored until fixed
-    // actual.count and actual.total not tested due to duplicates
-    assertEquals(actual.getStart(), expected.getStart());
-    assertEqualsAnyOrder(actual.getEntities(), expected.getEntities(), RELATED_ENTITY_COMPARATOR);
-  }
-
-  @Override
-  protected <T> void assertEqualsAnyOrder(List<T> actual, List<T> expected, Comparator<T> comparator) {
-    // https://github.com/datahub-project/datahub/issues/3115
-    // ElasticSearchGraphService produces duplicates, which is here ignored until fixed
-    assertEquals(new HashSet<>(actual), new HashSet<>(expected));
-  }
-
-  @Override
-  public void testFindRelatedEntitiesSourceEntityFilter(Filter sourceEntityFilter, List<String> relationshipTypes,
-      RelationshipFilter relationships, List<RelatedEntity> expectedRelatedEntities) throws Exception {
-    if (relationships.getDirection() == RelationshipDirection.UNDIRECTED) {
-      // https://github.com/datahub-project/datahub/issues/3114
-      throw new SkipException("ElasticSearchGraphService does not implement UNDIRECTED relationship filter");
-    }
-    super.testFindRelatedEntitiesSourceEntityFilter(sourceEntityFilter, relationshipTypes, relationships,
-        expectedRelatedEntities);
-  }
-
-  @Override
-  public void testFindRelatedEntitiesDestinationEntityFilter(Filter destinationEntityFilter,
-      List<String> relationshipTypes, RelationshipFilter relationships, List<RelatedEntity> expectedRelatedEntities)
-      throws Exception {
-    if (relationships.getDirection() == RelationshipDirection.UNDIRECTED) {
-      // https://github.com/datahub-project/datahub/issues/3114
-      throw new SkipException("ElasticSearchGraphService does not implement UNDIRECTED relationship filter");
-    }
-    super.testFindRelatedEntitiesDestinationEntityFilter(destinationEntityFilter, relationshipTypes, relationships,
-        expectedRelatedEntities);
-  }
-
-  @Override
-  public void testFindRelatedEntitiesSourceType(String datasetType, List<String> relationshipTypes,
-      RelationshipFilter relationships, List<RelatedEntity> expectedRelatedEntities) throws Exception {
-    if (relationships.getDirection() == RelationshipDirection.UNDIRECTED) {
-      // https://github.com/datahub-project/datahub/issues/3114
-      throw new SkipException("ElasticSearchGraphService does not implement UNDIRECTED relationship filter");
-    }
-    if (datasetType != null && datasetType.isEmpty()) {
-      // https://github.com/datahub-project/datahub/issues/3116
-      throw new SkipException("ElasticSearchGraphService does not support empty source type");
-    }
-    super.testFindRelatedEntitiesSourceType(datasetType, relationshipTypes, relationships, expectedRelatedEntities);
-  }
-
-  @Override
-  public void testFindRelatedEntitiesDestinationType(String datasetType, List<String> relationshipTypes,
-      RelationshipFilter relationships, List<RelatedEntity> expectedRelatedEntities) throws Exception {
-    if (relationships.getDirection() == RelationshipDirection.UNDIRECTED) {
-      // https://github.com/datahub-project/datahub/issues/3114
-      throw new SkipException("ElasticSearchGraphService does not implement UNDIRECTED relationship filter");
-    }
-    if (datasetType != null && datasetType.isEmpty()) {
-      // https://github.com/datahub-project/datahub/issues/3116
-      throw new SkipException("ElasticSearchGraphService does not support empty destination type");
-    }
-    super.testFindRelatedEntitiesDestinationType(datasetType, relationshipTypes, relationships,
-        expectedRelatedEntities);
+  public void beforeMethod() {
+    reset(mockESBulkProcessor, mockWriteDAO, mockReadDAO);
+    when(mockReadDAO.getGraphServiceConfig()).thenReturn(TEST_GRAPH_SERVICE_CONFIG);
   }
 
   @Test
-  @Override
-  public void testFindRelatedEntitiesNoRelationshipTypes() {
-    // https://github.com/datahub-project/datahub/issues/3117
-    throw new SkipException("ElasticSearchGraphService does not support empty list of relationship types");
-  }
+  public void testSetEdgeStatus() {
+    final Urn testUrn = UrnUtils.getUrn("urn:li:container:test");
+    for (boolean removed : Set.of(true, false)) {
+      test.setEdgeStatus(testUrn, removed, EdgeUrnType.values());
 
-  @Override
-  public void testRemoveEdgesFromNode(@Nonnull Urn nodeToRemoveFrom, @Nonnull List<String> relationTypes,
-      @Nonnull RelationshipFilter relationshipFilter, List<RelatedEntity> expectedOutgoingRelatedUrnsBeforeRemove,
-      List<RelatedEntity> expectedIncomingRelatedUrnsBeforeRemove,
-      List<RelatedEntity> expectedOutgoingRelatedUrnsAfterRemove,
-      List<RelatedEntity> expectedIncomingRelatedUrnsAfterRemove) throws Exception {
-    if (relationshipFilter.getDirection() == RelationshipDirection.UNDIRECTED) {
-      // https://github.com/datahub-project/datahub/issues/3114
-      throw new SkipException("ElasticSearchGraphService does not implement UNDIRECTED relationship filter");
+      ArgumentCaptor<Script> scriptCaptor = ArgumentCaptor.forClass(Script.class);
+      ArgumentCaptor<QueryBuilder> queryCaptor = ArgumentCaptor.forClass(QueryBuilder.class);
+      verify(mockWriteDAO, times(EdgeUrnType.values().length))
+          .updateByQuery(scriptCaptor.capture(), queryCaptor.capture());
+
+      queryCaptor
+          .getAllValues()
+          .forEach(
+              queryBuilder -> {
+                BoolQueryBuilder query = (BoolQueryBuilder) queryBuilder;
+
+                // urn targeted
+                assertEquals(
+                    ((TermQueryBuilder) query.filter().get(0)).value(), testUrn.toString());
+
+                // Expected inverse query
+                if (removed) {
+                  assertEquals(((TermQueryBuilder) query.should().get(0)).value(), "false");
+                  assertTrue(
+                      ((ExistsQueryBuilder)
+                              ((BoolQueryBuilder) query.should().get(1)).mustNot().get(0))
+                          .fieldName()
+                          .toLowerCase()
+                          .contains("removed"));
+                } else {
+                  assertEquals(((TermQueryBuilder) query.filter().get(1)).value(), "true");
+                }
+              });
+
+      // reset for next boolean
+      reset(mockWriteDAO);
     }
-    super.testRemoveEdgesFromNode(nodeToRemoveFrom, relationTypes, relationshipFilter,
-        expectedOutgoingRelatedUrnsBeforeRemove, expectedIncomingRelatedUrnsBeforeRemove,
-        expectedOutgoingRelatedUrnsAfterRemove, expectedIncomingRelatedUrnsAfterRemove);
   }
 
   @Test
-  @Override
-  public void testRemoveEdgesFromNodeNoRelationshipTypes() {
-    // https://github.com/datahub-project/datahub/issues/3117
-    throw new SkipException("ElasticSearchGraphService does not support empty list of relationship types");
+  public void testScrollRelatedEntities() {
+    // Mock dependencies
+    OperationContext mockOpContext = TestOperationContexts.systemContextNoValidate();
+    GraphFilters mockGraphFilters = GraphFilters.ALL;
+    List<SortCriterion> mockSortCriteria = Collections.emptyList();
+
+    String scrollId = "test-scroll-id";
+    String keepAlive = "1m";
+    int count = 10;
+
+    // Create mock search response
+    SearchResponse mockResponse = mock(SearchResponse.class);
+    SearchHits mockHits = mock(SearchHits.class);
+    when(mockResponse.getHits()).thenReturn(mockHits);
+
+    // Use reflection to create a TotalHits object with the desired value
+    TotalHits totalHits = new TotalHits(15L, TotalHits.Relation.EQUAL_TO);
+    when(mockHits.getTotalHits()).thenReturn(totalHits);
+
+    // Setup search hits
+    SearchHit[] searchHits = new SearchHit[2];
+    searchHits[0] = createMockSearchHit("source1", "dest1", "relationshipType1", null);
+    searchHits[1] = createMockSearchHit("source2", "dest2", "relationshipType2", "via1");
+    when(mockHits.getHits()).thenReturn(searchHits);
+
+    // Mock read DAO behavior
+    when(mockReadDAO.getSearchResponse(any(), any(), any(), any(), any(), anyInt()))
+        .thenReturn(mockResponse);
+    when(mockReadDAO.getGraphServiceConfig()).thenReturn(TEST_GRAPH_SERVICE_CONFIG);
+
+    // Call the method under test
+    RelatedEntitiesScrollResult result =
+        test.scrollRelatedEntities(
+            mockOpContext,
+            mockGraphFilters,
+            mockSortCriteria,
+            scrollId,
+            keepAlive,
+            count,
+            null,
+            null);
+
+    // Verify the DAO was called correctly
+    verify(mockReadDAO)
+        .getSearchResponse(
+            eq(mockOpContext),
+            eq(mockGraphFilters),
+            eq(mockSortCriteria),
+            eq(scrollId),
+            eq(keepAlive),
+            eq(count));
+
+    // Verify result contains expected values
+    assertEquals(result.getNumResults(), 15);
+    assertEquals(result.getPageSize(), 2);
+    assertEquals(result.getEntities().size(), 2);
+
+    // Verify the returned entities
+    RelatedEntities entity1 = result.getEntities().get(0);
+    assertEquals(entity1.getRelationshipType(), "relationshipType1");
+    assertEquals(entity1.getSourceUrn(), "source1");
+    assertEquals(entity1.getDestinationUrn(), "dest1");
+    assertEquals(entity1.getVia(), null);
+
+    RelatedEntities entity2 = result.getEntities().get(1);
+    assertEquals(entity2.getRelationshipType(), "relationshipType2");
+    assertEquals(entity2.getSourceUrn(), "source2");
+    assertEquals(entity2.getDestinationUrn(), "dest2");
+    assertEquals(entity2.getVia(), "via1");
+
+    // Verify scrollId is null since searchHits.length < count
+    assertNull(result.getScrollId());
   }
 
   @Test
-  // TODO: Only in ES for now since unimplemented in other services
-  public void testRemoveEdge() throws Exception {
-    DatasetUrn datasetUrn = new DatasetUrn(new DataPlatformUrn("snowflake"), "test", FabricType.TEST);
-    TagUrn tagUrn = new TagUrn("newTag");
-    Edge edge = new Edge(datasetUrn, tagUrn, TAG_RELATIONSHIP, null, null, null, null, null);
-    getGraphService().addEdge(edge);
-    syncAfterWrite();
-    RelatedEntitiesResult result = getGraphService().findRelatedEntities(Collections.singletonList(datasetType),
-        newFilter(Collections.singletonMap("urn", datasetUrn.toString())), Collections.singletonList("tag"),
-        EMPTY_FILTER, Collections.singletonList(TAG_RELATIONSHIP),
-        newRelationshipFilter(EMPTY_FILTER, RelationshipDirection.OUTGOING), 0, 100);
-    assertEquals(result.getTotal(), 1);
-    getGraphService().removeEdge(edge);
-    syncAfterWrite();
-    result = getGraphService().findRelatedEntities(Collections.singletonList(datasetType),
-        newFilter(Collections.singletonMap("urn", datasetUrn.toString())), Collections.singletonList("tag"),
-        EMPTY_FILTER, Collections.singletonList(TAG_RELATIONSHIP),
-        newRelationshipFilter(EMPTY_FILTER, RelationshipDirection.OUTGOING), 0, 100);
+  public void testFindRelatedEntitiesNullResponse() {
+    // Mock dependencies
+    OperationContext mockOpContext = TestOperationContexts.systemContextNoValidate();
+    GraphFilters mockGraphFilters = GraphFilters.ALL;
+    int offset = 5;
+    int count = 10;
+
+    // Mock read DAO behavior to return null
+    when(mockReadDAO.getSearchResponse(
+            any(OperationContext.class), any(GraphFilters.class), anyInt(), anyInt()))
+        .thenReturn(null);
+
+    // Call the method under test
+    RelatedEntitiesResult result =
+        test.findRelatedEntities(mockOpContext, mockGraphFilters, offset, count);
+
+    // Verify the DAO was called correctly
+    verify(mockReadDAO)
+        .getSearchResponse(eq(mockOpContext), eq(mockGraphFilters), eq(offset), eq(count));
+
+    // Verify result contains expected values for a null response
+    assertEquals(result.getStart(), offset);
+    assertEquals(result.getCount(), 0);
     assertEquals(result.getTotal(), 0);
+    assertTrue(result.getEntities().isEmpty());
   }
 
   @Test
-  @Override
-  public void testConcurrentAddEdge() {
-    // https://github.com/datahub-project/datahub/issues/3124
-    throw new SkipException(
-        "This test is flaky for ElasticSearchGraphService, ~5% of the runs fail on a race condition");
+  public void testFindRelatedEntitiesNoResultsByType() {
+    // Mock dependencies
+    OperationContext mockOpContext = TestOperationContexts.systemContextNoValidate();
+    GraphFilters mockGraphFilters = mock(GraphFilters.class);
+    int offset = 5;
+    int count = 10;
+
+    // Configure graphFilters to return true for noResultsByType
+    when(mockGraphFilters.noResultsByType()).thenReturn(true);
+
+    // Call the method under test
+    RelatedEntitiesResult result =
+        test.findRelatedEntities(mockOpContext, mockGraphFilters, offset, count);
+
+    // Verify that noResultsByType was called
+    verify(mockGraphFilters).noResultsByType();
+
+    // Verify that the search response method was NOT called since we short-circuit
+    verify(mockReadDAO, never()).getSearchResponse(any(), any(), anyInt(), anyInt());
+
+    // Verify result contains expected values for noResultsByType
+    assertEquals(result.getStart(), offset);
+    assertEquals(result.getCount(), 0);
+    assertEquals(result.getTotal(), 0);
+    assertTrue(result.getEntities().isEmpty());
   }
 
   @Test
-  @Override
-  public void testConcurrentRemoveEdgesFromNode() {
-    // https://github.com/datahub-project/datahub/issues/3118
-    throw new SkipException("ElasticSearchGraphService produces duplicates");
+  public void testRaw() {
+    // Create test edge tuples
+    List<EdgeTuple> edgeTuples =
+        Arrays.asList(
+            new EdgeTuple("urn:li:dataset:1", "urn:li:dataset:2", "Produces"),
+            new EdgeTuple("urn:li:dataset:3", "urn:li:dataset:4", "Consumes"));
+
+    // Create mock search response
+    SearchResponse mockResponse = mock(SearchResponse.class);
+    SearchHits mockHits = mock(SearchHits.class);
+    when(mockResponse.getHits()).thenReturn(mockHits);
+
+    TotalHits totalHits = new TotalHits(2L, TotalHits.Relation.EQUAL_TO);
+    when(mockHits.getTotalHits()).thenReturn(totalHits);
+
+    // Create search hits
+    SearchHit[] searchHits = new SearchHit[2];
+    searchHits[0] = createMockSearchHit("urn:li:dataset:1", "urn:li:dataset:2", "Produces", null);
+    searchHits[1] =
+        createMockSearchHit(
+            "urn:li:dataset:4", "urn:li:dataset:3", "Consumes", "urn:li:dataset:via");
+    when(mockHits.getHits()).thenReturn(searchHits);
+
+    // Mock the executeSearch method
+    when(mockReadDAO.executeSearch(any(SearchRequest.class))).thenReturn(mockResponse);
+
+    // Execute the method
+    OperationContext opContext = TestOperationContexts.systemContextNoValidate();
+    List<Map<String, Object>> results = test.raw(opContext, edgeTuples);
+
+    // Verify the search request was made
+    ArgumentCaptor<SearchRequest> requestCaptor = ArgumentCaptor.forClass(SearchRequest.class);
+    verify(mockReadDAO).executeSearch(requestCaptor.capture());
+
+    // Verify results
+    assertEquals(results.size(), 2);
+
+    // Verify first result
+    Map<String, Object> firstResult = results.get(0);
+    Map<String, Object> source = (Map<String, Object>) firstResult.get("source");
+    Map<String, Object> destination = (Map<String, Object>) firstResult.get("destination");
+    assertEquals(source.get("urn"), "urn:li:dataset:1");
+    assertEquals(destination.get("urn"), "urn:li:dataset:2");
+    assertEquals(firstResult.get("relationshipType"), "Produces");
+
+    // Verify second result
+    Map<String, Object> secondResult = results.get(1);
+    source = (Map<String, Object>) secondResult.get("source");
+    destination = (Map<String, Object>) secondResult.get("destination");
+    assertEquals(source.get("urn"), "urn:li:dataset:4");
+    assertEquals(destination.get("urn"), "urn:li:dataset:3");
+    assertEquals(secondResult.get("relationshipType"), "Consumes");
+    assertEquals(secondResult.get("via"), "urn:li:dataset:via");
   }
 
   @Test
-  @Override
-  public void testConcurrentRemoveNodes() {
-    // https://github.com/datahub-project/datahub/issues/3118
-    throw new SkipException("ElasticSearchGraphService produces duplicates");
+  public void testRawWithNullInput() {
+    OperationContext opContext = TestOperationContexts.systemContextNoValidate();
+
+    // Test with null input
+    List<Map<String, Object>> results = test.raw(opContext, null);
+    assertTrue(results.isEmpty());
   }
 
   @Test
-  public void testTimestampLineage() throws Exception {
-    // Populate one upstream and two downstream edges at initialTime
-    Long initialTime = 1000L;
+  public void testRawWithEmptyInput() {
+    OperationContext opContext = TestOperationContexts.systemContextNoValidate();
 
-    List<Edge> edges = Arrays.asList(
-        // One upstream edge
-        new Edge(datasetTwoUrn, datasetOneUrn, downstreamOf, initialTime, null, initialTime, null, null),
-        // Two downstream
-        new Edge(datasetThreeUrn, datasetTwoUrn, downstreamOf, initialTime, null, initialTime, null, null),
-        new Edge(datasetFourUrn, datasetTwoUrn, downstreamOf, initialTime, null, initialTime, null, null),
-        // One with null values, should always be returned
-        new Edge(datasetFiveUrn, datasetTwoUrn, downstreamOf, null, null, null, null, null)
-    );
-
-    edges.forEach(getGraphService()::addEdge);
-    syncAfterWrite();
-
-    // Without timestamps
-    EntityLineageResult upstreamResult = getUpstreamLineage(datasetTwoUrn, null, null);
-    EntityLineageResult downstreamResult = getDownstreamLineage(datasetTwoUrn, null, null);
-    Assert.assertEquals(new Integer(1), upstreamResult.getTotal());
-    Assert.assertEquals(new Integer(3), downstreamResult.getTotal());
-
-    // Timestamp before
-    upstreamResult = getUpstreamLineage(datasetTwoUrn,
-        0L,
-        initialTime - 10);
-    downstreamResult = getDownstreamLineage(datasetTwoUrn,
-        0L,
-        initialTime - 10);
-    Assert.assertEquals(new Integer(0), upstreamResult.getTotal());
-    Assert.assertEquals(new Integer(1), downstreamResult.getTotal());
-
-    // Timestamp after
-    upstreamResult = getUpstreamLineage(datasetTwoUrn,
-        initialTime + 10,
-        initialTime + 100);
-    downstreamResult = getDownstreamLineage(datasetTwoUrn,
-        initialTime + 10,
-        initialTime + 100);
-    Assert.assertEquals(new Integer(0), upstreamResult.getTotal());
-    Assert.assertEquals(new Integer(1), downstreamResult.getTotal());
-
-    // Timestamp included
-    upstreamResult = getUpstreamLineage(datasetTwoUrn,
-        initialTime - 10,
-        initialTime + 10);
-    downstreamResult = getDownstreamLineage(datasetTwoUrn,
-        initialTime - 10,
-        initialTime + 10);
-    Assert.assertEquals(new Integer(1), upstreamResult.getTotal());
-    Assert.assertEquals(new Integer(3), downstreamResult.getTotal());
-
-    // Update only one of the downstream edges
-    Long updatedTime = 2000L;
-    edges = Arrays.asList(
-        new Edge(datasetTwoUrn, datasetOneUrn, downstreamOf, initialTime, null, updatedTime, null, null),
-        new Edge(datasetThreeUrn, datasetTwoUrn, downstreamOf, initialTime, null, updatedTime, null, null)
-    );
-
-    edges.forEach(getGraphService()::addEdge);
-    syncAfterWrite();
-
-    // Without timestamps
-    upstreamResult = getUpstreamLineage(datasetTwoUrn,
-        null,
-        null);
-    downstreamResult = getDownstreamLineage(datasetTwoUrn,
-        null,
-        null);
-    Assert.assertEquals(new Integer(1), upstreamResult.getTotal());
-    Assert.assertEquals(new Integer(3), downstreamResult.getTotal());
-
-    // Window includes initial time and updated time
-    upstreamResult = getUpstreamLineage(datasetTwoUrn,
-        initialTime - 10,
-        updatedTime + 10);
-    downstreamResult = getDownstreamLineage(datasetTwoUrn,
-        initialTime - 10,
-        updatedTime + 10);
-    Assert.assertEquals(new Integer(1), upstreamResult.getTotal());
-    Assert.assertEquals(new Integer(3), downstreamResult.getTotal());
-
-    // Window includes updated time but not initial time
-    upstreamResult = getUpstreamLineage(datasetTwoUrn,
-        initialTime + 10,
-        updatedTime + 10);
-    downstreamResult = getDownstreamLineage(datasetTwoUrn,
-        initialTime + 10,
-        updatedTime + 10);
-    Assert.assertEquals(new Integer(1), upstreamResult.getTotal());
-    Assert.assertEquals(new Integer(2), downstreamResult.getTotal());
-
+    // Test with empty list
+    List<Map<String, Object>> results = test.raw(opContext, Collections.emptyList());
+    assertTrue(results.isEmpty());
   }
 
-  /**
-   * Utility method to reduce repeated parameters for lineage tests
-   * @param urn URN to query
-   * @param startTime Start of time-based lineage query
-   * @param endTime End of time-based lineage query
-   * @return The Upstream lineage for urn from the window from startTime to endTime
-   */
-  private EntityLineageResult getUpstreamLineage(Urn urn, Long startTime, Long endTime) {
-    return getLineage(urn,
-        LineageDirection.UPSTREAM,
-        startTime,
-        endTime);
+  @Test
+  public void testRawWithInvalidEdgeTuples() {
+    // Create edge tuples with null values
+    List<EdgeTuple> edgeTuples =
+        Arrays.asList(
+            new EdgeTuple(null, "urn:li:dataset:2", "Produces"),
+            new EdgeTuple("urn:li:dataset:1", null, "Consumes"),
+            new EdgeTuple("urn:li:dataset:1", "urn:li:dataset:2", null),
+            new EdgeTuple("urn:li:dataset:3", "urn:li:dataset:4", "ValidRel"));
+
+    // Mock response for the valid tuple only
+    SearchResponse mockResponse = mock(SearchResponse.class);
+    SearchHits mockHits = mock(SearchHits.class);
+    when(mockResponse.getHits()).thenReturn(mockHits);
+
+    TotalHits totalHits = new TotalHits(1L, TotalHits.Relation.EQUAL_TO);
+    when(mockHits.getTotalHits()).thenReturn(totalHits);
+
+    SearchHit[] searchHits = new SearchHit[1];
+    searchHits[0] = createMockSearchHit("urn:li:dataset:3", "urn:li:dataset:4", "ValidRel", null);
+    when(mockHits.getHits()).thenReturn(searchHits);
+
+    when(mockReadDAO.executeSearch(any(SearchRequest.class))).thenReturn(mockResponse);
+
+    OperationContext opContext = TestOperationContexts.systemContextNoValidate();
+    List<Map<String, Object>> results = test.raw(opContext, edgeTuples);
+
+    // Should only return results for the valid tuple
+    assertEquals(results.size(), 1);
+    Map<String, Object> result = results.get(0);
+    assertEquals(((Map<String, Object>) result.get("source")).get("urn"), "urn:li:dataset:3");
   }
 
-  /**
-   * Utility method to reduce repeated parameters for lineage tests
-   * @param urn URN to query
-   * @param startTime Start of time-based lineage query
-   * @param endTime End of time-based lineage query
-   * @return The Downstream lineage for urn from the window from startTime to endTime
-   */
-  private EntityLineageResult getDownstreamLineage(Urn urn, Long startTime, Long endTime) {
-    return getLineage(urn,
-        LineageDirection.DOWNSTREAM,
-        startTime,
-        endTime);
-  }
+  // Helper method to create mock search hits
+  private SearchHit createMockSearchHit(
+      String sourceUrn, String destUrn, String relType, String via) {
+    SearchHit mockHit = mock(SearchHit.class);
+    Map<String, Object> sourceMap = new HashMap<>();
 
-  /**
-   * Utility method to reduce repeated parameters for lineage tests
-   * @param urn URN to query
-   * @param direction Direction to query (upstream/downstream)
-   * @param startTime Start of time-based lineage query
-   * @param endTime End of time-based lineage query
-   * @return The lineage for urn from the window from startTime to endTime in direction
-   */
-  private EntityLineageResult getLineage(Urn urn, LineageDirection direction, Long startTime, Long endTime) {
-    return getGraphService().getLineage(urn,
-        direction,
-        0,
-        0,
-        3,
-        startTime,
-        endTime);
+    Map<String, String> sourceObj = new HashMap<>();
+    sourceObj.put("urn", sourceUrn);
+    sourceMap.put("source", sourceObj);
+
+    Map<String, String> destObj = new HashMap<>();
+    destObj.put("urn", destUrn);
+    sourceMap.put("destination", destObj);
+
+    sourceMap.put("relationshipType", relType);
+
+    if (via != null) {
+      sourceMap.put("via", via);
+    }
+
+    when(mockHit.getSourceAsMap()).thenReturn(sourceMap);
+    return mockHit;
   }
 }

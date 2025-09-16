@@ -1,24 +1,25 @@
-import React from 'react';
-import { useHistory, useLocation } from 'react-router-dom';
-import { Button, Input, Popover, Select, Tooltip, Typography } from 'antd';
-import { debounce } from 'lodash';
 import {
     AuditOutlined,
     CaretDownOutlined,
     FileTextOutlined,
     QuestionCircleOutlined,
-    SearchOutlined,
     TableOutlined,
 } from '@ant-design/icons';
+import { Icon } from '@components';
+import { Button, Input, Popover, Select, Tooltip, Typography } from 'antd';
+import { debounce } from 'lodash';
+import React from 'react';
+import { useHistory, useLocation } from 'react-router-dom';
 import styled from 'styled-components/macro';
-import CustomPagination from './CustomPagination';
-import TabToolbar from '../../../../shared/components/styled/TabToolbar';
-import { SemanticVersionStruct } from '../../../../../../types.generated';
-import { toRelativeTimeString } from '../../../../../shared/time/timeUtils';
-import { ANTD_GRAY, REDESIGN_COLORS } from '../../../../shared/constants';
-import { navigateToVersionedDatasetUrl } from '../../../../shared/tabs/Dataset/Schema/utils/navigateToVersionedDatasetUrl';
-import SchemaTimeStamps from './SchemaTimeStamps';
-import getSchemaFilterFromQueryString from '../../../../shared/tabs/Dataset/Schema/utils/getSchemaFilterFromQueryString';
+
+import CustomPagination from '@app/entity/dataset/profile/schema/components/CustomPagination';
+import TabToolbar from '@app/entity/shared/components/styled/TabToolbar';
+import { ANTD_GRAY, REDESIGN_COLORS } from '@app/entity/shared/constants';
+import getSchemaFilterFromQueryString from '@app/entity/shared/tabs/Dataset/Schema/utils/getSchemaFilterFromQueryString';
+import { navigateToVersionedDatasetUrl } from '@app/entity/shared/tabs/Dataset/Schema/utils/navigateToVersionedDatasetUrl';
+import { toRelativeTimeString } from '@app/shared/time/timeUtils';
+
+import { SemanticVersionStruct } from '@types';
 
 const SchemaHeaderContainer = styled.div`
     display: flex;
@@ -137,8 +138,6 @@ type Props = {
     hasKeySchema: boolean;
     showKeySchema: boolean;
     setShowKeySchema: (show: boolean) => void;
-    lastUpdated?: number | null;
-    lastObserved?: number | null;
     selectedVersion: string;
     versionList: Array<SemanticVersionStruct>;
     showSchemaAuditView: boolean;
@@ -158,8 +157,6 @@ export default function SchemaHeader({
     hasKeySchema,
     showKeySchema,
     setShowKeySchema,
-    lastUpdated,
-    lastObserved,
     selectedVersion,
     versionList,
     showSchemaAuditView,
@@ -207,7 +204,7 @@ export default function SchemaHeader({
     );
     const schemaFilter = getSchemaFilterFromQueryString(location);
 
-    const docLink = 'https://datahubproject.io/docs/dev-guides/timeline/';
+    const docLink = 'https://docs.datahub.com/docs/dev-guides/timeline/';
     return (
         <TabToolbar>
             <SchemaHeaderContainer>
@@ -250,12 +247,11 @@ export default function SchemaHeader({
                             placeholder="Search in schema..."
                             onChange={debouncedSetFilterText}
                             allowClear
-                            prefix={<SearchOutlined />}
+                            prefix={<Icon icon="MagnifyingGlass" source="phosphor" />}
                         />
                     )}
                 </LeftButtonsGroup>
                 <RightButtonsGroup>
-                    <SchemaTimeStamps lastObserved={lastObserved} lastUpdated={lastUpdated} />
                     <Tooltip title={schemaAuditToggleText}>
                         <SchemaAuditButton
                             type="text"

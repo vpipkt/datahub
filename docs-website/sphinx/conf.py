@@ -3,6 +3,10 @@
 # For the full list of built-in configuration values, see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+# See https://stackoverflow.com/a/65147676
+import builtins
+
+builtins.__sphinx_build__ = True
 
 # -- Project information -----------------------------------------------------
 # https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
@@ -22,8 +26,10 @@ extensions = [
     "sphinx_autodoc_typehints",
     # This enables us to autogenerate docs for our CLI.
     "sphinx_click",
+    "sphinx_markdown_builder",
 ]
 
+markdown_anchor_sections = True
 napoleon_use_param = True
 
 # Move type hint info to function description instead of signature

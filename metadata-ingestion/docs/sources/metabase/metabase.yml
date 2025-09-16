@@ -7,11 +7,13 @@ source:
     # Credentials
     username: user
     password: pass
+    api_key: key
 
     # Options
     default_schema: public
     database_alias_map:
       h2: sample-dataset.db
+    exclude_other_user_collections: true
     # Optional mapping of platform types to instance ids
     platform_instance_map: # optional
       postgres: test_postgres    # optional

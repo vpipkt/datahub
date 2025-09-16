@@ -1,14 +1,15 @@
-import { dataFlow1, dataJob1, dataset1, dataset2, dataset3 } from '../../../Mocks';
-import { existsInEntitiesToAdd } from '../manage/AddEntityEdge';
-import { buildUpdateLineagePayload, getValidEntityTypes } from '../utils/manageLineageUtils';
-import { Direction } from '../types';
-import { EntityType } from '../../../types.generated';
+import { existsInEntitiesToAdd } from '@app/lineage/manage/AddEntityEdge';
+import { Direction } from '@app/lineage/types';
+import { buildUpdateLineagePayload, getValidEntityTypes } from '@app/lineage/utils/manageLineageUtils';
+import { dataFlow1, dataJob1, dataset1, dataset2, dataset3 } from '@src/Mocks';
+
+import { EntityType } from '@types';
 
 describe('existsInEntitiesToAdd', () => {
     it('should return false if the search result is not in entitiesAlreadyAdded', () => {
         const result = { entity: { urn: 'urn:li:test' } } as any;
         const entitiesAlreadyAdded = [{ urn: 'urn:li:testing123' }] as any;
-        const exists = existsInEntitiesToAdd(result, entitiesAlreadyAdded);
+        const exists = existsInEntitiesToAdd(result.entity, entitiesAlreadyAdded);
 
         expect(exists).toBe(false);
     });
@@ -16,7 +17,7 @@ describe('existsInEntitiesToAdd', () => {
     it('should return true if the search result is in entitiesAlreadyAdded', () => {
         const result = { entity: { urn: 'urn:li:test' } } as any;
         const entitiesAlreadyAdded = [{ urn: 'urn:li:testing123' }, { urn: 'urn:li:test' }] as any;
-        const exists = existsInEntitiesToAdd(result, entitiesAlreadyAdded);
+        const exists = existsInEntitiesToAdd(result.entity, entitiesAlreadyAdded);
 
         expect(exists).toBe(true);
     });

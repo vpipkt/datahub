@@ -27,6 +27,7 @@ For more information on, please refer to the following links."
 - [Querying for Domain of a Dataset](/docs/api/tutorials/domains.md#read-domains)
 - [Querying for Glossary Terms of a Dataset](/docs/api/tutorials/terms.md#read-terms)
 - [Querying for Deprecation of a dataset](/docs/api/tutorials/deprecation.md#read-deprecation)
+- [Querying for all DataJobs that belong to a DataFlow](/docs/lineage/airflow.md#get-all-datajobs-associated-with-a-dataflow)
 
 ### Search
 
@@ -74,6 +75,16 @@ If you need to paginate through more, you can change the default value for the `
 :::note
 Mutations which change Entity metadata are subject to [DataHub Access Policies](../../authorization/policies.md).
 This means that DataHub's server will check whether the requesting actor is authorized to perform the action.
+:::
+
+:::note
+GraphQL's mutations in DataHub are primarily designed to support user interface interactions and should generally be
+avoided in programmatic use cases. While mutations are implemented and available through the GraphQL API,
+they are not intended for high-throughput scenarios or bulk operations commonly found in data integration workflows.
+
+For programmatic metadata management, data ingestion, and bulk operations, use the **Python SDK** instead.
+The Python SDK is available as part of the `acryl-datahub` package and includes comprehensive examples for common use
+cases. For detailed usage instructions, see the [Python SDK documentation](../../../metadata-ingestion/as-a-library.md).
 :::
 
 To update an existing Metadata Entity, simply use the `update<entityName>(urn: String!, input: EntityUpdateInput!)` GraphQL Query.
@@ -152,6 +163,3 @@ With the following error codes officially supported:
 | 403  | UNAUTHORIZED | The current actor is not authorized to perform the requested action.                          |
 | 404  | NOT_FOUND    | The resource is not found.                                                                    |
 | 500  | SERVER_ERROR | An internal error has occurred. Check your server logs or contact your DataHub administrator. |
-
-> Visit our [Slack channel](https://slack.datahubproject.io) to ask questions, tell us what we can do better, & make requests for what you'd like to see in the future. Or just
-> stop by to say 'Hi'.

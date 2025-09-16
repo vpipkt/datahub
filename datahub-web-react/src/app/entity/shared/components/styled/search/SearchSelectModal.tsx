@@ -1,10 +1,14 @@
-import { Button, Modal } from 'antd';
+import { Modal } from 'antd';
 import React, { useState } from 'react';
 import styled from 'styled-components';
-import { EntityType } from '../../../../../../types.generated';
-import ClickOutside from '../../../../../shared/ClickOutside';
-import { EntityAndType } from '../../../types';
-import { SearchSelect } from './SearchSelect';
+
+import { SearchSelect } from '@app/entity/shared/components/styled/search/SearchSelect';
+import { EntityAndType } from '@app/entity/shared/types';
+import ClickOutside from '@app/shared/ClickOutside';
+import { Button } from '@src/alchemy-components';
+import { ModalButtonContainer } from '@src/app/shared/button/styledComponents';
+
+import { EntityType } from '@types';
 
 const StyledModal = styled(Modal)`
     top: 30px;
@@ -21,6 +25,8 @@ type Props = {
     continueText?: string | null;
     onContinue: (entityUrns: string[]) => void;
     onCancel?: () => void;
+    singleSelect?: boolean;
+    hideToolbar?: boolean;
 };
 
 /**
@@ -36,6 +42,8 @@ export const SearchSelectModal = ({
     continueText,
     onContinue,
     onCancel,
+    singleSelect,
+    hideToolbar,
 }: Props) => {
     const [selectedEntities, setSelectedEntities] = useState<EntityAndType[]>([]);
 
@@ -64,21 +72,22 @@ export const SearchSelectModal = ({
                 bodyStyle={MODAL_BODY_STYLE}
                 title={titleText || 'Select entities'}
                 width={MODAL_WIDTH_PX}
-                visible
+                open
                 onCancel={onCancelSelect}
                 footer={
-                    <>
-                        <Button onClick={onCancel} type="text">
+                    <ModalButtonContainer>
+                        <Button onClick={onCancel} variant="text" color="gray">
                             Cancel
                         </Button>
                         <Button
                             id="continueButton"
+                            data-testid="search-select-continue-button"
                             onClick={() => onContinue(selectedEntities.map((entity) => entity.urn))}
                             disabled={selectedEntities.length === 0}
                         >
                             {continueText || 'Done'}
                         </Button>
-                    </>
+                    </ModalButtonContainer>
                 }
             >
                 <SearchSelect
@@ -86,6 +95,8 @@ export const SearchSelectModal = ({
                     placeholderText={placeholderText}
                     selectedEntities={selectedEntities}
                     setSelectedEntities={setSelectedEntities}
+                    singleSelect={singleSelect}
+                    hideToolbar={hideToolbar}
                 />
             </StyledModal>
         </ClickOutside>

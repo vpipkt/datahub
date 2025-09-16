@@ -1,28 +1,25 @@
 package com.linkedin.metadata.entity.ebean;
 
-import com.linkedin.metadata.entity.EntityAspect;
+import com.linkedin.metadata.aspect.EntityAspect;
 import com.linkedin.metadata.entity.EntityAspectIdentifier;
 import io.ebean.Model;
 import io.ebean.annotation.Index;
+import jakarta.persistence.Column;
+import jakarta.persistence.Embeddable;
+import jakarta.persistence.EmbeddedId;
+import jakarta.persistence.Entity;
+import jakarta.persistence.Lob;
+import jakarta.persistence.Table;
+import java.io.Serializable;
 import java.sql.Timestamp;
+import java.util.Objects;
 import javax.annotation.Nonnull;
-import javax.persistence.Column;
-import javax.persistence.Embeddable;
-import javax.persistence.EmbeddedId;
-import javax.persistence.Entity;
-import javax.persistence.Lob;
-import javax.persistence.Table;
 import lombok.AllArgsConstructor;
-import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.NonNull;
 import lombok.Setter;
 
-
-/**
- * Schema definition for the new aspect table.
- */
+/** Schema definition for the new aspect table. */
 @Getter
 @Setter
 @NoArgsConstructor
@@ -30,8 +27,6 @@ import lombok.Setter;
 @Entity
 @Table(name = "metadata_aspect_v2")
 public class EbeanAspectV2 extends Model {
-
-  private static final long serialVersionUID = 1L;
 
   public static final String ALL_COLUMNS = "*";
   public static final String KEY_ID = "key";
@@ -45,24 +40,26 @@ public class EbeanAspectV2 extends Model {
 
   public static final String SYSTEM_METADATA_COLUMN = "systemmetadata";
 
-  /**
-   * Key for an aspect in the table.
-   */
+  /** Key for an aspect in the table. */
   @Embeddable
   @Getter
-  @AllArgsConstructor
   @NoArgsConstructor
-  @EqualsAndHashCode
-  public static class PrimaryKey {
+  public static class PrimaryKey implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    @NonNull
+    public PrimaryKey(@Nonnull String urn, @Nonnull String aspect, long version) {
+      this.urn = urn.stripTrailing();
+      this.aspect = aspect.stripTrailing();
+      this.version = version;
+    }
+
+    @Nonnull
     @Index
     @Column(name = URN_COLUMN, length = 500, nullable = false)
     private String urn;
 
-    @NonNull
+    @Nonnull
     @Index
     @Column(name = ASPECT_COLUMN, length = 200, nullable = false)
     private String aspect;
@@ -78,34 +75,52 @@ public class EbeanAspectV2 extends Model {
     public EntityAspectIdentifier toAspectIdentifier() {
       return new EntityAspectIdentifier(getUrn(), getAspect(), getVersion());
     }
+
+    // Custom Equals and Hash code that trims to handle MySQL PAD SPACE:
+    // https://dev.mysql.com/doc/refman/8.4/en/charset-binary-collations.html#charset-binary-collations-trailing-space-comparisons
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      PrimaryKey that = (PrimaryKey) o;
+      return version == that.version
+          && Objects.equals(urn.stripTrailing(), that.urn.stripTrailing())
+          && Objects.equals(aspect.stripTrailing(), that.aspect.stripTrailing());
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(urn.stripTrailing(), aspect.stripTrailing(), version);
+    }
   }
 
-  @NonNull
-  @EmbeddedId
-  @Index
-  protected PrimaryKey key;
+  @Nonnull @EmbeddedId @Index protected PrimaryKey key;
 
-  @NonNull
+  @Nonnull
   @Column(name = URN_COLUMN, length = 500, nullable = false)
   private String urn;
 
-  @NonNull
+  @Nonnull
   @Column(name = ASPECT_COLUMN, length = 200, nullable = false)
   private String aspect;
 
   @Column(name = VERSION_COLUMN, nullable = false)
   private long version;
 
-  @NonNull
+  @Nonnull
   @Lob
   @Column(name = METADATA_COLUMN, nullable = false)
   protected String metadata;
 
-  @NonNull
+  @Nonnull
   @Column(name = CREATED_ON_COLUMN, nullable = false)
   private Timestamp createdOn;
 
-  @NonNull
+  @Nonnull
   @Column(name = CREATED_BY_COLUMN, nullable = false)
   private String createdBy;
 
@@ -113,11 +128,27 @@ public class EbeanAspectV2 extends Model {
   private String createdFor;
 
   @Column(name = SYSTEM_METADATA_COLUMN, nullable = true)
+  @Lob
   protected String systemMetadata;
 
-  public EbeanAspectV2(String urn, String aspect, long version, String metadata, Timestamp createdOn, String createdBy,
-      String createdFor, String systemMetadata) {
-    this(new PrimaryKey(urn, aspect, version), urn, aspect, version, metadata, createdOn, createdBy, createdFor,
+  public EbeanAspectV2(
+      String urn,
+      String aspect,
+      long version,
+      String metadata,
+      Timestamp createdOn,
+      String createdBy,
+      String createdFor,
+      String systemMetadata) {
+    this(
+        new PrimaryKey(urn, aspect, version),
+        urn,
+        aspect,
+        version,
+        metadata,
+        createdOn,
+        createdBy,
+        createdFor,
         systemMetadata);
   }
 
@@ -131,8 +162,7 @@ public class EbeanAspectV2 extends Model {
         getSystemMetadata(),
         getCreatedOn(),
         getCreatedBy(),
-        getCreatedFor()
-    );
+        getCreatedFor());
   }
 
   public static EbeanAspectV2 fromEntityAspect(EntityAspect aspect) {
@@ -144,7 +174,6 @@ public class EbeanAspectV2 extends Model {
         aspect.getCreatedOn(),
         aspect.getCreatedBy(),
         aspect.getCreatedFor(),
-        aspect.getSystemMetadata()
-    );
+        aspect.getSystemMetadata());
   }
 }

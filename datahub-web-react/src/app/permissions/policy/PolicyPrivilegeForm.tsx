@@ -1,46 +1,73 @@
-import React, { useMemo } from 'react';
+import { Tooltip } from '@components';
+import { Tag as CustomTag, Form, Select, Tag, Typography } from 'antd';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Form, Select, Tag, Tooltip, Typography } from 'antd';
 import styled from 'styled-components/macro';
 
-import { useEntityRegistry } from '../../useEntityRegistry';
-import { useAppConfig } from '../../useAppConfig';
+import DomainNavigator from '@app/domainV2/nestedDomains/domainNavigator/DomainNavigator';
+import { RESOURCE_TYPE, RESOURCE_URN, TYPE, URN } from '@app/permissions/policy/constants';
 import {
-    useGetSearchResultsForMultipleLazyQuery,
-    useGetSearchResultsLazyQuery,
-} from '../../../graphql/search.generated';
-import { ResourceFilter, PolicyType, EntityType } from '../../../types.generated';
-import {
+    EMPTY_POLICY,
     convertLegacyResourceFilter,
     createCriterionValue,
     createCriterionValueWithEntity,
-    EMPTY_POLICY,
     getFieldValues,
+    getFieldValuesOfTags,
     mapResourceTypeToDisplayName,
     mapResourceTypeToEntityType,
     mapResourceTypeToPrivileges,
     setFieldValues,
-} from './policyUtils';
+} from '@app/permissions/policy/policyUtils';
+import ClickOutside from '@app/shared/ClickOutside';
+import { ENTER_KEY_CODE } from '@app/shared/constants';
+import { useGetRecommendations } from '@app/shared/recommendation';
+import { BrowserWrapper } from '@app/shared/tags/AddTagsTermsModal';
+import { TagTermLabel } from '@app/shared/tags/TagTermLabel';
+import { useAppConfig } from '@app/useAppConfig';
+import { useEntityRegistry } from '@app/useEntityRegistry';
+
+import { useGetSearchResultsForMultipleLazyQuery, useGetSearchResultsLazyQuery } from '@graphql/search.generated';
+import { Container, Domain, Entity, EntityType, PolicyType, ResourceFilter } from '@types';
 
 type Props = {
     policyType: PolicyType;
     resources?: ResourceFilter;
     setResources: (resources: ResourceFilter) => void;
+    selectedTags?: any[];
+    setSelectedTags: (data: any) => void;
+    setEditState: (data: boolean) => void;
+    isEditState: boolean;
     privileges: Array<string>;
     setPrivileges: (newPrivs: Array<string>) => void;
+    focusPolicyUrn: string | undefined;
 };
 
 const SearchResultContainer = styled.div`
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 12px;
+    padding: 4px;
 `;
 
 const PrivilegesForm = styled(Form)`
     margin: 12px;
     margin-top: 36px;
     margin-bottom: 40px;
+`;
+
+const TagSelect = styled(Select)`
+    width: 480px;
+`;
+
+const StyleTag = styled(CustomTag)`
+    margin: 2px;
+    display: flex;
+    justify-content: start;
+    align-items: center;
+    white-space: nowrap;
+    opacity: 1;
+    color: #434343;
+    line-height: 16px;
 `;
 
 /**
@@ -53,8 +80,23 @@ export default function PolicyPrivilegeForm({
     setResources,
     privileges,
     setPrivileges,
+    setSelectedTags,
+    selectedTags,
+    setEditState,
+    isEditState,
+    focusPolicyUrn,
 }: Props) {
     const entityRegistry = useEntityRegistry();
+    const [domainInputValue, setDomainInputValue] = useState('');
+    const [containerInputValue, setContainerInputValue] = useState('');
+    const [isFocusedOnInput, setIsFocusedOnInput] = useState(false);
+    const [inputValue, setInputValue] = useState('');
+    const [tagTermSearch, { data: tagTermSearchData }] = useGetSearchResultsLazyQuery();
+    const { recommendedData } = useGetRecommendations([EntityType.Tag]);
+    const tagSearchResults: Array<Entity> =
+        tagTermSearchData?.search?.searchResults?.map((searchResult) => searchResult.entity) || [];
+
+    const inputEl = useRef(null);
 
     // Configuration used for displaying options
     const {
@@ -62,8 +104,9 @@ export default function PolicyPrivilegeForm({
     } = useAppConfig();
 
     const resources: ResourceFilter = convertLegacyResourceFilter(maybeResources) || EMPTY_POLICY.resources;
-    const resourceTypes = getFieldValues(resources.filter, 'RESOURCE_TYPE') || [];
-    const resourceEntities = getFieldValues(resources.filter, 'RESOURCE_URN') || [];
+    // RESOURCE_TYPE and RESOURCE_URN are deprecated, but need to get them for backwards compatibility
+    const resourceTypes = getFieldValues(resources.filter, TYPE, RESOURCE_TYPE) || [];
+    const resourceEntities = getFieldValues(resources.filter, URN, RESOURCE_URN) || [];
 
     const getDisplayName = (entity) => {
         if (!entity) {
@@ -90,6 +133,15 @@ export default function PolicyPrivilegeForm({
     const [searchDomains, { data: domainsSearchData }] = useGetSearchResultsLazyQuery();
     const domainSearchResults = domainsSearchData?.search?.searchResults;
 
+    // Search for containers
+    const containers = getFieldValues(resources.filter, 'CONTAINER') || [];
+    const [searchContainers, { data: containersSearchData }] = useGetSearchResultsLazyQuery();
+    const containerSearchResults = containersSearchData?.search?.searchResults;
+    const containerUrnToDisplayName = new Map();
+    containers.forEach((containerEntity) => {
+        containerUrnToDisplayName[containerEntity.value] = getDisplayName(containerEntity.entity);
+    });
+
     // Whether to show the resource filter inputs including "resource type", "resource", and "domain"
     const showResourceFilterInput = policyType !== PolicyType.Platform;
 
@@ -97,7 +149,12 @@ export default function PolicyPrivilegeForm({
     const resourceTypeSelectValue = resourceTypes.map((criterionValue) => criterionValue.value);
     const resourceSelectValue = resourceEntities.map((criterionValue) => criterionValue.value);
     const domainSelectValue = getFieldValues(resources.filter, 'DOMAIN').map((criterionValue) => criterionValue.value);
+    const containerSelectValue = getFieldValues(resources.filter, 'CONTAINER').map(
+        (criterionValue) => criterionValue.value,
+    );
     const privilegesSelectValue = privileges;
+    const isShowingDomainNavigator = !domainInputValue && isFocusedOnInput;
+    const isShowingContainerNavigator = !containerInputValue && isFocusedOnInput;
 
     // Construct privilege options for dropdown
     const platformPrivileges = policiesConfig?.platformPrivileges || [];
@@ -137,9 +194,11 @@ export default function PolicyPrivilegeForm({
         const filter = resources.filter || {
             criteria: [],
         };
+        // remove the deprecated RESOURCE_TYPE field and replace with TYPE field
+        const filterWithoutDeprecatedField = setFieldValues(filter, RESOURCE_TYPE, []);
         setResources({
             ...resources,
-            filter: setFieldValues(filter, 'RESOURCE_TYPE', [
+            filter: setFieldValues(filterWithoutDeprecatedField, TYPE, [
                 ...resourceTypes,
                 createCriterionValue(selectedResourceType),
             ]),
@@ -150,11 +209,13 @@ export default function PolicyPrivilegeForm({
         const filter = resources.filter || {
             criteria: [],
         };
+        // remove the deprecated RESOURCE_TYPE field and replace with TYPE field
+        const filterWithoutDeprecatedField = setFieldValues(filter, RESOURCE_TYPE, []);
         setResources({
             ...resources,
             filter: setFieldValues(
-                filter,
-                'RESOURCE_TYPE',
+                filterWithoutDeprecatedField,
+                TYPE,
                 resourceTypes?.filter((criterionValue) => criterionValue.value !== deselectedResourceType),
             ),
         });
@@ -165,9 +226,11 @@ export default function PolicyPrivilegeForm({
         const filter = resources.filter || {
             criteria: [],
         };
+        // remove the deprecated RESOURCE_URN field and replace with URN field
+        const filterWithoutDeprecatedField = setFieldValues(filter, RESOURCE_URN, []);
         setResources({
             ...resources,
-            filter: setFieldValues(filter, 'RESOURCE_URN', [
+            filter: setFieldValues(filterWithoutDeprecatedField, URN, [
                 ...resourceEntities,
                 createCriterionValueWithEntity(
                     resource,
@@ -182,30 +245,38 @@ export default function PolicyPrivilegeForm({
         const filter = resources.filter || {
             criteria: [],
         };
+        // remove the deprecated RESOURCE_URN field and replace with URN field
+        const filterWithoutDeprecatedField = setFieldValues(filter, RESOURCE_URN, []);
         setResources({
             ...resources,
             filter: setFieldValues(
-                filter,
-                'RESOURCE_URN',
+                filterWithoutDeprecatedField,
+                URN,
                 resourceEntities?.filter((criterionValue) => criterionValue.value !== resource),
             ),
         });
     };
 
     // When a domain is selected, add its urn to the list of domains
-    const onSelectDomain = (domain) => {
+    const onSelectDomain = (domainUrn, domainObj?: Domain) => {
         const filter = resources.filter || {
             criteria: [],
         };
+        const domainEntity = domainObj || getEntityFromSearchResults(domainSearchResults, domainUrn);
         const updatedFilter = setFieldValues(filter, 'DOMAIN', [
             ...domains,
-            createCriterionValueWithEntity(domain, getEntityFromSearchResults(domainSearchResults, domain) || null),
+            createCriterionValueWithEntity(domainUrn, domainEntity || null),
         ]);
         setResources({
             ...resources,
             filter: updatedFilter,
         });
     };
+
+    function selectDomainFromBrowser(domain: Domain) {
+        onSelectDomain(domain.urn, domain);
+        setIsFocusedOnInput(false);
+    }
 
     // When a domain is deselected, remove its urn from the list of domains
     const onDeselectDomain = (domain) => {
@@ -218,6 +289,36 @@ export default function PolicyPrivilegeForm({
                 filter,
                 'DOMAIN',
                 domains?.filter((criterionValue) => criterionValue.value !== domain),
+            ),
+        });
+    };
+
+    // Add new container selection handler
+    const onSelectContainer = (containerUrn, containerObj?: Container) => {
+        const filter = resources.filter || {
+            criteria: [],
+        };
+        const containerEntity = containerObj || getEntityFromSearchResults(containerSearchResults, containerUrn);
+        const updatedFilter = setFieldValues(filter, 'CONTAINER', [
+            ...containers,
+            createCriterionValueWithEntity(containerUrn, containerEntity || null),
+        ]);
+        setResources({
+            ...resources,
+            filter: updatedFilter,
+        });
+    };
+
+    const onDeselectContainer = (containerUrn: string) => {
+        const filter = resources.filter || {
+            criteria: [],
+        };
+        setResources({
+            ...resources,
+            filter: setFieldValues(
+                filter,
+                'CONTAINER',
+                containers?.filter((criterionValue) => criterionValue.value !== containerUrn),
             ),
         });
     };
@@ -243,10 +344,26 @@ export default function PolicyPrivilegeForm({
     // Handle domain search, if the domain type has an associated EntityType mapping.
     const handleDomainSearch = (text: string) => {
         const trimmedText: string = text.trim();
+        setDomainInputValue(trimmedText);
         searchDomains({
             variables: {
                 input: {
                     type: EntityType.Domain,
+                    query: trimmedText.length > 2 ? trimmedText : '*',
+                    start: 0,
+                    count: 10,
+                },
+            },
+        });
+    };
+
+    const handleContainerSearch = (text: string) => {
+        const trimmedText: string = text.trim();
+        setContainerInputValue(trimmedText);
+        searchContainers({
+            variables: {
+                input: {
+                    type: EntityType.Container,
                     query: trimmedText.length > 2 ? trimmedText : '*',
                     start: 0,
                     count: 10,
@@ -276,6 +393,144 @@ export default function PolicyPrivilegeForm({
             : displayStr;
     };
 
+    function handleCLickOutside() {
+        // delay closing the domain navigator so we don't get a UI "flash" between showing search results and navigator
+        setTimeout(() => setIsFocusedOnInput(false), 0);
+    }
+
+    function handleBlur() {
+        setDomainInputValue('');
+    }
+
+    function handleBlurContainer() {
+        setContainerInputValue('');
+    }
+
+    function handleBlurTag() {
+        setInputValue('');
+    }
+
+    const renderSearchResultTags = (entity: Entity) => {
+        const displayName =
+            entity.type === EntityType.Tag ? (entity as any).name : entityRegistry.getDisplayName(entity.type, entity);
+        const tagOrTermComponent = <TagTermLabel entity={entity} />;
+        return (
+            <Select.Option data-testid="tag-term-option" value={entity.urn} key={entity.urn} name={displayName}>
+                <SearchResultContainer>{tagOrTermComponent}</SearchResultContainer>
+            </Select.Option>
+        );
+    };
+    const tags = getFieldValues(resources.filter, 'TAG') || [];
+    const newTag = getFieldValues(resources.filter, 'TAG').map((criterionValue) => {
+        if (criterionValue?.value) {
+            return criterionValue?.value;
+        }
+        return criterionValue;
+    });
+
+    const editTags = getFieldValuesOfTags(resources.filter, 'TAG').map((criterionValue) => {
+        if (criterionValue?.value) {
+            return criterionValue?.entity;
+        }
+        return criterionValue;
+    });
+    const tagResult = !inputValue || inputValue.length === 0 ? recommendedData : tagSearchResults;
+    useEffect(() => {
+        if (focusPolicyUrn && isEditState && setEditState && editTags && newTag) {
+            setEditState(false);
+            const filter = resources.filter || {
+                criteria: [],
+            };
+            setSelectedTags(editTags);
+            setResources({
+                ...resources,
+                filter: setFieldValues(filter, 'TAG', [...(newTag as any)]),
+            });
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [focusPolicyUrn, isEditState, setEditState, editTags, newTag]);
+
+    const onSelectValue = (urn: string) => {
+        const filter = resources.filter || {
+            criteria: [],
+        };
+        const selectedTagOption = tagResult?.find((tag) => tag.urn === urn);
+
+        setResources({
+            ...resources,
+            filter: setFieldValues(filter, 'TAG', [...tags, urn as any]),
+        });
+        setSelectedTags([...(selectedTags as any), selectedTagOption]);
+        if (inputEl && inputEl.current) {
+            (inputEl.current as any).blur();
+        }
+    };
+
+    // When a Tag search result is deselected, remove the Tags
+    const onDeselectValue = (urn: string) => {
+        const filter = resources.filter || {
+            criteria: [],
+        };
+        setInputValue('');
+        setSelectedTags(selectedTags?.filter((term) => term.urn !== urn));
+
+        setResources({
+            ...resources,
+            filter: setFieldValues(
+                filter,
+                'TAG',
+                tags?.filter((criterionValue) => (criterionValue as any) !== urn),
+            ),
+        });
+    };
+
+    const type = EntityType.Tag;
+    const handleSearch = (text: string) => {
+        if (text.length > 0) {
+            tagTermSearch({
+                variables: {
+                    input: {
+                        type,
+                        query: text,
+                        start: 0,
+                        count: 10,
+                    },
+                },
+            });
+        }
+    };
+
+    const tagSearchOptions = tagResult?.map((result) => {
+        return renderSearchResultTags(result);
+    });
+
+    function clearInput() {
+        setInputValue('');
+        setTimeout(() => setIsFocusedOnInput(true), 0); // call after click outside
+    }
+
+    const tagRender = (props) => {
+        // eslint-disable-next-line react/prop-types
+        const { closable, onClose, value } = props;
+        const onPreventMouseDown = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+        };
+
+        const selectedItem = selectedTags?.find((term) => term?.urn === value);
+        return (
+            <StyleTag onMouseDown={onPreventMouseDown} closable={closable} onClose={onClose}>
+                {selectedItem?.name}
+            </StyleTag>
+        );
+    };
+
+    function handleKeyDown(event) {
+        if (event.keyCode === ENTER_KEY_CODE) {
+            (inputEl.current as any).blur();
+        }
+    }
+
     return (
         <PrivilegesForm layout="vertical">
             {showResourceFilterInput && (
@@ -300,7 +555,7 @@ export default function PolicyPrivilegeForm({
                             .filter((privs) => privs.resourceType !== 'all')
                             .map((resPrivs) => {
                                 return (
-                                    <Select.Option value={resPrivs.resourceType}>
+                                    <Select.Option key={resPrivs.resourceType} value={resPrivs.resourceType}>
                                         {resPrivs.resourceTypeDisplayName}
                                     </Select.Option>
                                 );
@@ -336,37 +591,115 @@ export default function PolicyPrivilegeForm({
                         )}
                     >
                         {resourceSearchResults?.map((result) => (
-                            <Select.Option value={result.entity.urn}>{renderSearchResult(result)}</Select.Option>
+                            <Select.Option key={result.entity.urn} value={result.entity.urn}>
+                                {renderSearchResult(result)}
+                            </Select.Option>
                         ))}
                     </Select>
                 </Form.Item>
             )}
             {showResourceFilterInput && (
-                <Form.Item label={<Typography.Text strong>Domain</Typography.Text>}>
+                <Form.Item label={<Typography.Text strong>Select Tags</Typography.Text>}>
                     <Typography.Paragraph>
-                        Search for domains the policy should apply to. If <b>none</b> is selected, policy is applied to{' '}
-                        <b>all</b> resources in all domains.
+                        The policy will apply to all entities containing all of the chosen tags. If no tags are
+                        selected, the policy will not account for tags.
+                    </Typography.Paragraph>
+                    <TagSelect
+                        data-testid="tag-term-modal-input"
+                        mode="multiple"
+                        ref={inputEl}
+                        filterOption={false}
+                        placeholder={`Search for ${entityRegistry.getEntityName(type)?.toLowerCase()}...`}
+                        showSearch
+                        defaultActiveFirstOption={false}
+                        onSelect={(asset: any) => onSelectValue(asset)}
+                        onDeselect={(asset: any) => onDeselectValue(asset)}
+                        onSearch={(value: string) => {
+                            // eslint-disable-next-line react/prop-types
+                            handleSearch(value.trim());
+                            // eslint-disable-next-line react/prop-types
+                            setInputValue(value.trim());
+                        }}
+                        tagRender={tagRender}
+                        value={tags}
+                        onClear={clearInput}
+                        onBlur={handleBlurTag}
+                        onInputKeyDown={handleKeyDown}
+                    >
+                        {tagSearchOptions}
+                    </TagSelect>
+                </Form.Item>
+            )}
+            {showResourceFilterInput && (
+                <Form.Item label={<Typography.Text strong>Select Domains</Typography.Text>}>
+                    <Typography.Paragraph>
+                        The policy will apply to any chosen domains and all their nested domains. If <b>none</b> are
+                        selected, the policy is applied to <b>all</b> resources of in all domains.
+                    </Typography.Paragraph>
+                    <ClickOutside onClickOutside={handleCLickOutside}>
+                        <Select
+                            showSearch
+                            value={domainSelectValue}
+                            mode="multiple"
+                            filterOption={false}
+                            placeholder="Apply to ALL domains by default. Select domains to apply to specific domains."
+                            onSelect={(value) => onSelectDomain(value)}
+                            onDeselect={onDeselectDomain}
+                            onSearch={handleDomainSearch}
+                            onFocus={() => setIsFocusedOnInput(true)}
+                            onBlur={handleBlur}
+                            tagRender={(tagProps) => (
+                                <Tag closable={tagProps.closable} onClose={tagProps.onClose}>
+                                    {displayStringWithMaxLength(
+                                        domainUrnToDisplayName[tagProps.value.toString()] || tagProps.value.toString(),
+                                        75,
+                                    )}
+                                </Tag>
+                            )}
+                            dropdownStyle={isShowingDomainNavigator ? { display: 'none' } : {}}
+                        >
+                            {domainSearchResults?.map((result) => (
+                                <Select.Option key={result.entity.urn} value={result.entity.urn}>
+                                    {renderSearchResult(result)}
+                                </Select.Option>
+                            ))}
+                        </Select>
+                        <BrowserWrapper isHidden={!isShowingDomainNavigator} width="100%" maxHeight={300}>
+                            <DomainNavigator selectDomainOverride={selectDomainFromBrowser} />
+                        </BrowserWrapper>
+                    </ClickOutside>
+                </Form.Item>
+            )}
+            {showResourceFilterInput && (
+                <Form.Item label={<Typography.Text strong>Select Containers</Typography.Text>}>
+                    <Typography.Paragraph>
+                        The policy will apply to resources only in the chosen containers. If <b>none</b> are selected,
+                        the policy is applied to resources in <b>all</b> containers.
                     </Typography.Paragraph>
                     <Select
-                        notFoundContent="No search results found"
-                        value={domainSelectValue}
+                        showSearch
+                        value={containerSelectValue}
                         mode="multiple"
                         filterOption={false}
-                        placeholder="Apply to ALL domains by default. Select domains to apply to specific domains."
-                        onSelect={onSelectDomain}
-                        onDeselect={onDeselectDomain}
-                        onSearch={handleDomainSearch}
+                        placeholder="Apply to ALL containers by default. Select containers to apply to specific containers."
+                        onSelect={(value) => onSelectContainer(value)}
+                        onDeselect={onDeselectContainer}
+                        onSearch={handleContainerSearch}
+                        onBlur={handleBlurContainer}
                         tagRender={(tagProps) => (
                             <Tag closable={tagProps.closable} onClose={tagProps.onClose}>
                                 {displayStringWithMaxLength(
-                                    domainUrnToDisplayName[tagProps.value.toString()] || tagProps.value.toString(),
+                                    containerUrnToDisplayName[tagProps.value.toString()] || tagProps.value.toString(),
                                     75,
                                 )}
                             </Tag>
                         )}
+                        dropdownStyle={isShowingContainerNavigator ? { display: 'none' } : {}}
                     >
-                        {domainSearchResults?.map((result) => (
-                            <Select.Option value={result.entity.urn}>{renderSearchResult(result)}</Select.Option>
+                        {containerSearchResults?.map((result) => (
+                            <Select.Option key={result.entity.urn} value={result.entity.urn}>
+                                {renderSearchResult(result)}
+                            </Select.Option>
                         ))}
                     </Select>
                 </Form.Item>
@@ -384,10 +717,18 @@ export default function PolicyPrivilegeForm({
                             {tagProps.label}
                         </Tag>
                     )}
+                    filterOption={(input, option) => {
+                        return !!option?.children?.toString().toLowerCase().includes(input.toLowerCase());
+                    }}
                 >
-                    {privilegeOptions.map((priv) => (
-                        <Select.Option value={priv.type}>{priv.displayName}</Select.Option>
-                    ))}
+                    {privilegeOptions.map((priv, index) => {
+                        const key = `${priv.type}-${index}`;
+                        return (
+                            <Select.Option key={key} value={priv.type}>
+                                {priv.displayName}
+                            </Select.Option>
+                        );
+                    })}
                     <Select.Option value="All">All Privileges</Select.Option>
                 </Select>
             </Form.Item>

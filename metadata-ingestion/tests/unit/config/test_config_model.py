@@ -3,8 +3,11 @@ from typing import List
 import pydantic
 import pytest
 
-from datahub.configuration.common import ConfigModel, redact_raw_config
-from datahub.ingestion.source.unity.config import UnityCatalogSourceConfig
+from datahub.configuration.common import (
+    AllowDenyPattern,
+    ConfigModel,
+    redact_raw_config,
+)
 
 
 def test_extras_not_allowed():
@@ -75,9 +78,41 @@ def test_config_redaction():
     }
 
 
+def test_config_redaction_2():
+    obj = {
+        "config": {
+            "catalog": {
+                "config": {
+                    "s3.access-key-id": "ABCDEF",
+                    "s3.secret-access-key": "8126818",
+                }
+            }
+        },
+    }
+
+    redacted = redact_raw_config(obj)
+    assert redacted == {
+        "config": {
+            "catalog": {
+                "config": {
+                    "s3.access-key-id": "********",
+                    "s3.secret-access-key": "********",
+                }
+            }
+        },
+    }
+
+
 def test_shared_defaults():
-    c1 = UnityCatalogSourceConfig(token="s", workspace_url="https://workspace_url")
-    c2 = UnityCatalogSourceConfig(token="s", workspace_url="https://workspace_url")
+    class SourceConfig(ConfigModel):
+        token: str
+        workspace_url: str
+        catalog_pattern: AllowDenyPattern = pydantic.Field(
+            default=AllowDenyPattern.allow_all(),
+        )
+
+    c1 = SourceConfig(token="s", workspace_url="https://workspace_url")
+    c2 = SourceConfig(token="s", workspace_url="https://workspace_url")
 
     assert c2.catalog_pattern.allow == [".*"]
     c1.catalog_pattern.allow += ["foo"]

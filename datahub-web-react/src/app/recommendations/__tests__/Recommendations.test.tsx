@@ -1,12 +1,13 @@
-import React from 'react';
-import { render, waitFor } from '@testing-library/react';
 import { MockedProvider } from '@apollo/client/testing';
+import { render, waitFor } from '@testing-library/react';
+import React from 'react';
 import { Route } from 'react-router';
-import { HomePage } from '../../home/HomePage';
-import { mocks } from '../../../Mocks';
-import TestPageContainer from '../../../utils/test-utils/TestPageContainer';
-import { PageRoutes } from '../../../conf/Global';
-import { SearchPage } from '../../search/SearchPage';
+
+import { HomePage } from '@app/home/HomePage';
+import { SearchPage } from '@app/search/SearchPage';
+import { PageRoutes } from '@conf/Global';
+import { mocks } from '@src/Mocks';
+import TestPageContainer from '@utils/test-utils/TestPageContainer';
 
 describe('Recommendations', () => {
     it('home renders recommendations', async () => {
@@ -59,6 +60,7 @@ describe('Recommendations', () => {
     });
 
     // TODO: Uncomment once entity sidebar recs are fully supported.
+    // eslint-disable-next-line vitest/no-commented-out-tests
     // it('renders entity page sidebar recommendations', async () => {
     //     const { getByText } = render(
     //         <MockedProvider

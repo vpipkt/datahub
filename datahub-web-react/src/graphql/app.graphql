@@ -37,6 +37,7 @@ query appConfig {
         visualConfig {
             logoUrl
             faviconUrl
+            showFullTitleInLineage
             queriesTab {
                 queriesTabResultSize
             }
@@ -44,6 +45,16 @@ query appConfig {
                 domain {
                     defaultTab
                 }
+            }
+            searchResult {
+                enableNameHighlight
+            }
+            theme {
+                themeId
+            }
+            application {
+                showSidebarSectionWhenEmpty
+                showApplicationInNavigation
             }
         }
         telemetryConfig {
@@ -55,11 +66,56 @@ query appConfig {
         viewsConfig {
             enabled
         }
+        searchBarConfig {
+            apiVariant
+        }
+        searchCardConfig {
+            showDescription
+        }
+        homePageConfig {
+            firstInPersonalSidebar
+        }
         featureFlags {
             readOnlyModeEnabled
             showSearchFiltersV2
             showBrowseV2
             showAcrylInfo
+            erModelRelationshipFeatureEnabled
+            showAccessManagement
+            nestedDomainsEnabled
+            platformBrowseV2
+            businessAttributeEntityEnabled
+            dataContractsEnabled
+            editableDatasetNameEnabled
+            themeV2Enabled
+            themeV2Default
+            themeV2Toggleable
+            lineageGraphV2
+            showSeparateSiblings
+            showManageStructuredProperties
+            schemaFieldCLLEnabled
+            hideDbtSourceInLineage
+            schemaFieldLineageIgnoreStatus
+            showNavBarRedesign
+            showAutoCompleteResults
+            entityVersioningEnabled
+            showHasSiblingsFilter
+            showSearchBarAutocompleteRedesign
+            showManageTags
+            showIntroducePage
+            showIngestionPageRedesign
+            showLineageExpandMore
+            showStatsTabRedesign
+            showHomePageRedesign
+            showProductUpdates
+            lineageGraphV3
+            logicalModelsEnabled
+            showHomepageUserRole
+            assetSummaryPageV1
+        }
+        chromeExtensionConfig {
+            enabled
+            lineageEnabled
         }
     }
 }
@@ -79,6 +135,28 @@ query getGlobalViewsSettings {
     }
 }
 
+query getDocPropagationSettings {
+    docPropagationSettings {
+        docColumnPropagation
+    }
+}
+
+query getHomePageSettings {
+    globalHomePageSettings {
+        defaultTemplate {
+            ...PageTemplate
+        }
+    }
+}
+
 mutation updateGlobalViewsSettings($input: UpdateGlobalViewsSettingsInput!) {
     updateGlobalViewsSettings(input: $input)
+}
+
+mutation updateDocPropagationSettings($input: UpdateDocPropagationSettingsInput!) {
+    updateDocPropagationSettings(input: $input)
+}
+
+mutation updateApplicationsSettings($input: UpdateApplicationsSettingsInput!) {
+    updateApplicationsSettings(input: $input)
 }

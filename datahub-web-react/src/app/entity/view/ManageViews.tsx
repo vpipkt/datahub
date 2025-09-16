@@ -1,11 +1,15 @@
+import { Typography } from 'antd';
 import React from 'react';
 import styled from 'styled-components';
-import { Typography } from 'antd';
-import { ViewsList } from './ViewsList';
+
+import { ViewsList } from '@app/entity/view/ViewsList';
 
 const PageContainer = styled.div`
     padding-top: 20px;
     width: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
 `;
 
 const PageHeaderContainer = styled.div`
@@ -20,7 +24,11 @@ const PageTitle = styled(Typography.Title)`
     }
 `;
 
-const ListContainer = styled.div``;
+const ListContainer = styled.div`
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+`;
 
 /**
  * Component used for displaying the 'Manage Views' experience.

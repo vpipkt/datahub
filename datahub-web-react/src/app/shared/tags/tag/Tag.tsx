@@ -1,13 +1,16 @@
-import { message, Modal } from 'antd';
-import styled from 'styled-components';
+import { Modal, message } from 'antd';
 import React, { useState } from 'react';
 import Highlight from 'react-highlighter';
-import { useRemoveTagMutation } from '../../../../graphql/mutations.generated';
-import { EntityType, SubResourceType, TagAssociation } from '../../../../types.generated';
-import { StyledTag } from '../../../entity/shared/components/styled/StyledTag';
-import { HoverEntityTooltip } from '../../../recommendations/renderer/component/HoverEntityTooltip';
-import { useEntityRegistry } from '../../../useEntityRegistry';
-import { TagProfileDrawer } from '../TagProfileDrawer';
+import styled from 'styled-components';
+
+import { StyledTag } from '@app/entity/shared/components/styled/StyledTag';
+import { HoverEntityTooltip } from '@app/recommendations/renderer/component/HoverEntityTooltip';
+import { useHasMatchedFieldByUrn } from '@app/search/context/SearchResultContext';
+import { TagProfileDrawer } from '@app/shared/tags/TagProfileDrawer';
+import { useEntityRegistry } from '@app/useEntityRegistry';
+
+import { useRemoveTagMutation } from '@graphql/mutations.generated';
+import { EntityType, SubResourceType, TagAssociation } from '@types';
 
 const TagLink = styled.span`
     display: inline-block;
@@ -41,6 +44,7 @@ export default function Tag({
 }: Props) {
     const entityRegistry = useEntityRegistry();
     const [removeTagMutation] = useRemoveTagMutation();
+    const highlightTag = useHasMatchedFieldByUrn(tag.tag.urn, 'tags');
 
     const [tagProfileDrawerVisible, setTagProfileDrawerVisible] = useState(false);
     const [addTagUrn, setAddTagUrn] = useState('');
@@ -110,6 +114,7 @@ export default function Tag({
                             removeTag(tag);
                         }}
                         fontSize={fontSize}
+                        highlightTag={highlightTag}
                     >
                         <Highlight
                             style={{ marginLeft: 0, fontSize }}

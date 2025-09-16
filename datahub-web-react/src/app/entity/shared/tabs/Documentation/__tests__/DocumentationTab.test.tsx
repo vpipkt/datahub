@@ -2,11 +2,13 @@ import { MockedProvider } from '@apollo/client/testing';
 import { render } from '@testing-library/react';
 import DOMPurify from 'dompurify';
 import React from 'react';
-import { mocks } from '../../../../../../Mocks';
-import { EntityType } from '../../../../../../types.generated';
-import TestPageContainer from '../../../../../../utils/test-utils/TestPageContainer';
-import EntityContext from '../../../EntityContext';
-import { DocumentationTab } from '../DocumentationTab';
+
+import { EntityContext } from '@app/entity/shared/EntityContext';
+import { DocumentationTab } from '@app/entity/shared/tabs/Documentation/DocumentationTab';
+import { mocks } from '@src/Mocks';
+import TestPageContainer from '@utils/test-utils/TestPageContainer';
+
+import { EntityType } from '@types';
 
 describe('SchemaDescriptionField', () => {
     it('renders original description', async () => {
@@ -23,8 +25,12 @@ describe('SchemaDescriptionField', () => {
                                 },
                             },
                             baseEntity: {},
-                            updateEntity: jest.fn(),
-                            routeToTab: jest.fn(),
+                            updateEntity: vi.fn(),
+                            routeToTab: vi.fn(),
+                            loading: true,
+                            lineage: undefined,
+                            refetch: vi.fn(),
+                            dataNotCombinedWithSiblings: null,
                         }}
                     >
                         <DocumentationTab />
@@ -44,14 +50,20 @@ describe('SchemaDescriptionField', () => {
                             urn: 'urn:li:dataset:123',
                             entityType: EntityType.Dataset,
                             entityData: {
-                                description: 'This is a description',
+                                properties: {
+                                    description: 'This is a description',
+                                },
                                 editableProperties: {
                                     description: 'Edited description',
                                 },
                             },
                             baseEntity: {},
-                            updateEntity: jest.fn(),
-                            routeToTab: jest.fn(),
+                            updateEntity: vi.fn(),
+                            routeToTab: vi.fn(),
+                            loading: true,
+                            lineage: undefined,
+                            refetch: vi.fn(),
+                            dataNotCombinedWithSiblings: null,
                         }}
                     >
                         <DocumentationTab />

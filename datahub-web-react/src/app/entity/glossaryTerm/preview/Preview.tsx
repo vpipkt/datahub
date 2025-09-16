@@ -1,9 +1,13 @@
-import React from 'react';
 import { BookOutlined } from '@ant-design/icons';
-import { Deprecation, Domain, EntityType, Owner, ParentNodesResult } from '../../../../types.generated';
-import DefaultPreviewCard from '../../../preview/DefaultPreviewCard';
-import { useEntityRegistry } from '../../../useEntityRegistry';
-import { IconStyleType, PreviewType } from '../../Entity';
+import React from 'react';
+
+import { IconStyleType, PreviewType } from '@app/entity/Entity';
+import { getRelatedEntitiesUrl } from '@app/entity/glossaryTerm/utils';
+import UrlButton from '@app/entity/shared/UrlButton';
+import DefaultPreviewCard from '@app/preview/DefaultPreviewCard';
+import { useEntityRegistry } from '@app/useEntityRegistry';
+
+import { Deprecation, Domain, EntityType, Owner, ParentNodesResult } from '@types';
 
 export const Preview = ({
     urn,
@@ -37,8 +41,11 @@ export const Preview = ({
             type="Glossary Term"
             typeIcon={entityRegistry.getIcon(EntityType.GlossaryTerm, 14, IconStyleType.ACCENT)}
             deprecation={deprecation}
-            parentNodes={parentNodes}
+            parentEntities={parentNodes?.nodes}
             domain={domain}
+            entityTitleSuffix={
+                <UrlButton href={getRelatedEntitiesUrl(entityRegistry, urn)}>View Related Entities</UrlButton>
+            }
         />
     );
 };

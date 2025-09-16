@@ -1,3 +1,6 @@
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
 # Onboarding Users to DataHub
 
 New user accounts can be provisioned on DataHub in 3 ways:
@@ -19,13 +22,13 @@ To do so, navigate to the **Users & Groups** section inside of Settings page. He
 do not have the correct privileges to invite users, this button will be disabled.
 
 <p align="center">
-  <img width="100%" src="https://raw.githubusercontent.com/datahub-project/datahub/master/docs/imgs/invite-users-button.png"/>
+  <img width="100%" src="https://raw.githubusercontent.com/datahub-project/static-assets/master/imgs/invite-users-button.png"/>
 </p>
 
 To invite new users, simply share the link with others inside your organization.
 
 <p align="center">
-  <img width="70%" src="https://raw.githubusercontent.com/datahub-project/datahub/master/docs/imgs/invite-users-popup.png"/>
+  <img width="70%" src="https://raw.githubusercontent.com/datahub-project/static-assets/master/imgs/invite-users-popup.png"/>
 </p>
 
 When a new user visits the link, they will be directed to a sign up screen where they can create their DataHub account.
@@ -37,13 +40,13 @@ and click **Reset user password** inside the menu dropdown on the right hand sid
 `Manage User Credentials` [Platform Privilege](../../authorization/access-policies-guide.md) in order to reset passwords.
 
 <p align="center">
-  <img width="100%" src="https://raw.githubusercontent.com/datahub-project/datahub/master/docs/imgs/reset-user-password-button.png"/>
+  <img width="100%" src="https://raw.githubusercontent.com/datahub-project/static-assets/master/imgs/reset-user-password-button.png"/>
 </p>
 
 To reset the password, simply share the password reset link with the user who needs to change their password. Password reset links expire after 24 hours.
 
 <p align="center">
-  <img width="70%" src="https://raw.githubusercontent.com/datahub-project/datahub/master/docs/imgs/reset-user-password-popup.png"/>
+  <img width="70%" src="https://raw.githubusercontent.com/datahub-project/static-assets/master/imgs/reset-user-password-popup.png"/>
 </p>
 
 # Configuring Single Sign-On with OpenID Connect
@@ -60,7 +63,7 @@ and many more.
 
 This option is strongly recommended for production deployments of DataHub.
 
-### Managed DataHub
+### DataHub Cloud
 
 Single Sign-On can be configured and enabled by navigating to **Settings** > **SSO** > **OIDC**. Note
 that a user must have the **Manage Platform Settings** [Platform Privilege](../../authorization/access-policies-guide.md)
@@ -94,6 +97,11 @@ using this mechanism. It is highly recommended that admins change or remove the 
 
 ## Adding new users using a user.props file
 
+:::NOTE
+Adding users via the `user.props` will require disabling existence checks on GMS using the `METADATA_SERVICE_AUTH_ENFORCE_EXISTENCE_ENABLED=false` environment variable or using the API to enable the user prior to login.
+The directions below demonstrate using the API to enable the user.
+:::
+
 To define a set of username / password combinations that should be allowed to log in to DataHub (in addition to the root 'datahub' user),
 create a new file called `user.props` at the file path `${HOME}/.datahub/plugins/frontend/auth/user.props` within the `datahub-frontend-react` container
 or pod.
@@ -106,6 +114,29 @@ with usernames "janesmith" and "johndoe", we would define the following file:
 janesmith:janespassword
 johndoe:johnspassword
 ```
+
+In order to enable the user access with the credential defined in `user.props`, set the `status` aspect on the user with an Admin user. This can be done using an API call or via the [OpenAPI UI interface](/docs/api/openapi/openapi-usage-guide.md).
+
+<Tabs>
+<TabItem value="openapi" label="OpenAPI" default>
+
+Example enabling login for the `janesmith` user from the example above. Make sure to update the example with your access token.
+
+```shell
+curl -X 'POST' \
+  'http://localhost:9002/openapi/v3/entity/corpuser/urn%3Ali%3Acorpuser%3Ajanesmith/status?async=false&systemMetadata=false&createIfEntityNotExists=false&createIfNotExists=true' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -H 'Authorization: Bearer <access token>' \
+  -d '{
+  "value": {
+    "removed": false
+  }
+}'
+```
+
+</TabItem>
+</Tabs>
 
 Once you've saved the file, simply start the DataHub containers & navigate to `http://localhost:9002/login`
 to verify that your new credentials work.
@@ -134,7 +165,7 @@ For example, to mount a user.props file that is stored on my local filesystem at
     build:
       context: ../
       dockerfile: docker/datahub-frontend/Dockerfile
-    image: linkedin/datahub-frontend-react:${DATAHUB_VERSION:-head}
+    image: acryldata/datahub-frontend-react:${DATAHUB_VERSION:-head}
     .....
     # The new stuff
     volumes:

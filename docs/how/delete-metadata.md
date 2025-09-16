@@ -4,7 +4,7 @@
 To follow this guide, you'll need the [DataHub CLI](../cli.md).
 :::
 
-There are a two ways to delete metadata from DataHub:
+There are two ways to delete metadata from DataHub:
 
 1. Delete metadata attached to entities by providing a specific urn or filters that identify a set of urns (delete CLI).
 2. Delete metadata created by a single ingestion run (rollback).
@@ -43,6 +43,9 @@ datahub delete --platform snowflake
 # Filters can be combined, which will select entities that match all filters.
 datahub delete --platform looker --entity-type chart
 datahub delete --platform bigquery --env PROD
+
+# You can also do recursive deletes for container and dataPlatformInstance entities.
+datahub delete --urn "urn:li:container:f76..." --recursive
 ```
 
 When performing hard deletes, you can optionally add the `--only-soft-deleted` flag to only hard delete entities that were previously soft deleted.
@@ -94,6 +97,21 @@ The start and end time fields filter on the `timestampMillis` field of the times
 - `ddddddddd` (e.g. `1684384045`): a unix timestamp
 - `min`, `max`, `now`: special keywords
 
+#### Undo-ing soft deletion of entities
+
+You can restore soft-deleted entities using the `undo-by-filter` command. This reverts the effect of a soft delete.
+
+```shell
+# Restore (un-soft-delete) a single soft-deleted entity
+datahub delete undo-by-filter --urn "urn:li:dataset:(urn:li:dataPlatform:hive,fct_users_deleted,PROD)"
+
+# Restore all soft-deleted entities from a specific platform
+datahub delete undo-by-filter --platform snowflake
+
+# You can adjust the batch size (default 3000, max 10000) for better performance
+datahub delete undo-by-filter --platform snowflake --batch-size 5000
+```
+
 ## Delete CLI Examples
 
 :::note
@@ -122,11 +140,26 @@ datahub delete --urn "urn:li:dataset:(urn:li:dataPlatform:hive,fct_users_deleted
 datahub delete --platform snowflake --env DEV
 ```
 
+#### Delete everything within a specific Snowflake DB
+
+```shell
+# You can find your container urn by navigating to the relevant
+# DB in the DataHub UI and clicking the "copy urn" button.
+datahub delete --urn "urn:li:container:77644901c4f574845578ebd18b7c14fa" --recursive
+```
+
 #### Delete all BigQuery datasets in the PROD environment
 
 ```shell
 # Note: this will leave BigQuery containers intact.
 datahub delete --env PROD --entity-type dataset --platform bigquery
+```
+
+#### Delete everything within a MySQL platform instance
+
+```shell
+# The instance name comes from the `platform_instance` config option in the ingestion recipe.
+datahub delete --urn 'urn:li:dataPlatformInstance:(urn:li:dataPlatform:mysql,my_instance_name)' --recursive
 ```
 
 #### Delete all pipelines and tasks from Airflow
@@ -138,6 +171,7 @@ datahub delete --platform "airflow"
 #### Delete all containers for a particular platform
 
 ```shell
+# Note: this will leave S3 datasets intact.
 datahub delete --entity-type container --platform s3
 ```
 
@@ -191,7 +225,7 @@ datahub delete --platform snowflake --only-soft-deleted --hard
 
 ## Deletes using the SDK and APIs
 
-The Python SDK's [DataHubGraph](../../python-sdk/clients.md) client supports deletes via the following methods:
+The Python SDK's [DataHubGraph](../../python-sdk/clients/graph-client.mdx) client supports deletes via the following methods:
 
 - `soft_delete_entity`
 - `hard_delete_entity`
@@ -214,7 +248,13 @@ To view the ids of the most recent set of ingestion batches, execute
 datahub ingest list-runs
 ```
 
-That will print out a table of all the runs. Once you have an idea of which run you want to roll back, run
+That will print out a table of all the runs. To see run statuses or to filter runs by URN/source run
+
+```shell
+datahub ingest list-source-runs
+```
+
+Once you have an idea of which run you want to roll back, run
 
 ```shell
 datahub ingest show --run-id <run-id>

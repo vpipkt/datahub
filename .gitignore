@@ -32,6 +32,7 @@ venv.bak/
 dmypy.json
 MANIFEST
 *.pyc
+.python-version
 
 # Generated files
 **/bin
@@ -69,6 +70,8 @@ metadata-ingestion/generated/**
 
 # docs
 docs/generated/
+docs-website/versioned_docs/
+docs-website/versioned_sidebars/
 tmp*
 temp/**
 
@@ -82,6 +85,8 @@ metadata-service/plugin/src/test/resources/sample-plugins/**
 smoke-test/rollback-reports
 coverage*.xml
 .vercel
+.envrc
+**/.claude/settings.local.json
 
 # A long series of binary directories we should ignore
 datahub-frontend/bin/main/
@@ -122,4 +127,8 @@ metadata-service/servlet/bin/
 metadata-service/war/bin/
 metadata-utils/bin/
 test-models/bin/
+
+datahub-executor/
+datahub-integrations-service/
+metadata-ingestion-modules/acryl-cloud
 

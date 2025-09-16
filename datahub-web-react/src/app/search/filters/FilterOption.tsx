@@ -2,23 +2,31 @@ import { CaretUpOutlined } from '@ant-design/icons';
 import { Button, Checkbox } from 'antd';
 import React, { useState } from 'react';
 import styled from 'styled-components';
-import { FilterOptionType } from './types';
-import { EntityType, GlossaryNode, GlossaryTerm, Tag } from '../../../types.generated';
-import { generateColor } from '../../entity/shared/components/styled/StyledTag';
-import { ANTD_GRAY } from '../../entity/shared/constants';
-import { useEntityRegistry } from '../../useEntityRegistry';
+
+import { generateColor } from '@app/entity/shared/components/styled/StyledTag';
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+import ParentEntities from '@app/search/filters/ParentEntities';
+import { IconSpacer, Label } from '@app/search/filters/styledComponents';
+import { FilterOptionType } from '@app/search/filters/types';
 import {
+    getFilterIconAndLabel,
+    getParentEntities,
+    isAnyOptionSelected,
+    isFilterOptionSelected,
+} from '@app/search/filters/utils';
+import {
+    CONTAINER_FILTER_NAME,
     ENTITY_SUB_TYPE_FILTER_NAME,
     MAX_COUNT_VAL,
     PLATFORM_FILTER_NAME,
     TAGS_FILTER_NAME,
     TYPE_NAMES_FILTER_NAME,
-} from '../utils/constants';
-import { IconSpacer, Label } from './ActiveFilter';
-import { isFilterOptionSelected, getFilterIconAndLabel, isAnyOptionSelected } from './utils';
-import { capitalizeFirstLetterOnly } from '../../shared/textUtil';
-import ParentNodes from './ParentNodes';
-import { formatNumber } from '../../shared/formatNumber';
+} from '@app/search/utils/constants';
+import { formatNumber } from '@app/shared/formatNumber';
+import { capitalizeFirstLetterOnly } from '@app/shared/textUtil';
+import { useEntityRegistry } from '@app/useEntityRegistry';
+
+import { Entity, EntityType, Tag } from '@types';
 
 const FilterOptionWrapper = styled.div<{ centerAlign?: boolean; addPadding?: boolean }>`
     display: flex;
@@ -102,6 +110,10 @@ const ArrowButton = styled(Button)<{ isOpen: boolean }>`
     `}
 `;
 
+const ParentWrapper = styled.div`
+    max-width: 220px;
+`;
+
 interface Props {
     filterOption: FilterOptionType;
     selectedFilterOptions: FilterOptionType[];
@@ -118,14 +130,14 @@ export default function FilterOption({
     addPadding,
 }: Props) {
     const [areChildrenVisible, setAreChildrenVisible] = useState(true);
-    const { field, value, count, entity } = filterOption;
+    const { field, value, count, entity, displayName } = filterOption;
     const entityRegistry = useEntityRegistry();
     const { icon, label } = getFilterIconAndLabel(field, value, entityRegistry, entity || null, 14);
-    const shouldShowIcon = field === PLATFORM_FILTER_NAME && icon !== null;
+    const finalLabel = displayName || label;
+    const shouldShowIcon = (field === PLATFORM_FILTER_NAME || field === CONTAINER_FILTER_NAME) && icon !== null;
     const shouldShowTagColor = field === TAGS_FILTER_NAME && entity?.type === EntityType.Tag;
     const isSubTypeFilter = field === TYPE_NAMES_FILTER_NAME;
-    const isGlossaryTerm = entity?.type === EntityType.GlossaryTerm;
-    const parentNodes: GlossaryNode[] = isGlossaryTerm ? (entity as GlossaryTerm).parentNodes?.nodes || [] : [];
+    const parentEntities: Entity[] = getParentEntities(entity as Entity) || [];
     // only entity type filters return 10,000 max aggs
     const countText = count === MAX_COUNT_VAL && field === ENTITY_SUB_TYPE_FILTER_NAME ? '10k+' : formatNumber(count);
 
@@ -143,7 +155,7 @@ export default function FilterOption({
 
     return (
         <>
-            <FilterOptionWrapper centerAlign={parentNodes.length > 0} addPadding={addPadding}>
+            <FilterOptionWrapper centerAlign={parentEntities.length > 0} addPadding={addPadding}>
                 <StyledCheckbox
                     checked={isFilterOptionSelected(selectedFilterOptions, value)}
                     // show indeterminate if a nested option is selected
@@ -152,9 +164,13 @@ export default function FilterOption({
                         nestedOptions?.map((o) => o.value),
                     )}
                     onClick={updateFilterValues}
-                    data-testid={`filter-option-${label}`}
+                    data-testid={`filter-option-${finalLabel}`}
                 >
-                    {isGlossaryTerm && <ParentNodes glossaryTerm={entity as GlossaryTerm} />}
+                    {parentEntities.length > 0 && (
+                        <ParentWrapper>
+                            <ParentEntities parentEntities={parentEntities} />
+                        </ParentWrapper>
+                    )}
                     <CheckboxContent>
                         {shouldShowIcon && <>{icon}</>}
                         {shouldShowTagColor && (
@@ -162,8 +178,8 @@ export default function FilterOption({
                         )}
                         {(shouldShowIcon || shouldShowTagColor) && <IconSpacer />}
                         <LabelCountWrapper>
-                            <Label ellipsis={{ tooltip: label }} style={{ maxWidth: 150 }}>
-                                {isSubTypeFilter ? capitalizeFirstLetterOnly(label as string) : label}
+                            <Label ellipsis={{ tooltip: finalLabel }} style={{ maxWidth: 150 }}>
+                                {isSubTypeFilter ? capitalizeFirstLetterOnly(finalLabel as string) : finalLabel}
                             </Label>
                             <CountText>{countText}</CountText>
                             {nestedOptions && nestedOptions.length > 0 && (

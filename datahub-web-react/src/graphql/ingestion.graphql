@@ -4,38 +4,17 @@ query listIngestionSources($input: ListIngestionSourcesInput!) {
         count
         total
         ingestionSources {
-            urn
-            name
-            type
-            config {
-                recipe
-                version
-                executorId
-                debugMode
-            }
-            schedule {
-                interval
-                timezone
-            }
-            platform {
-                urn
-            }
+            ...ingestionSourceFields
             executions(start: 0, count: 1) {
                 start
                 count
                 total
                 executionRequests {
-                    urn
-                    id
-                    input {
-                        requestedAt
-                    }
-                    result {
-                        status
-                        startTimeMs
-                        durationMs
-                    }
+                    ...ingestionExecutionRequestFields
                 }
+            }
+            ownership {
+                ...ownershipFields
             }
         }
     }
@@ -43,62 +22,39 @@ query listIngestionSources($input: ListIngestionSourcesInput!) {
 
 query getIngestionSource($urn: String!, $runStart: Int, $runCount: Int) {
     ingestionSource(urn: $urn) {
-        urn
-        name
-        type
-        config {
-            recipe
-            version
-            executorId
-            debugMode
-        }
-        schedule {
-            interval
-            timezone
-        }
-        platform {
-            urn
-        }
+        ...ingestionSourceFields
         executions(start: $runStart, count: $runCount) {
             start
             count
             total
             executionRequests {
-                urn
-                id
-                input {
-                    requestedAt
-                    source {
-                        type
-                    }
-                }
-                result {
-                    status
-                    startTimeMs
-                    durationMs
-                }
+                ...ingestionExecutionRequestFields
             }
+        }
+        ownership {
+            ...ownershipFields
         }
     }
 }
 
 query getIngestionExecutionRequest($urn: String!) {
     executionRequest(urn: $urn) {
-        urn
-        id
-        input {
+        ...ingestionExecutionRequestFields
+    }
+}
+
+query listIngestionExecutionRequests($input: ListExecutionRequestsInput!) {
+    listExecutionRequests(input: $input) {
+        start
+        total
+        count
+        executionRequests {
+            ...ingestionExecutionRequestFields
             source {
-                type
-            }
-        }
-        result {
-            status
-            startTimeMs
-            durationMs
-            report
-            structuredReport {
-                type
-                serializedValue
+                ...ingestionSourceFields
+                latestSuccessfulExecution {
+                    ...minimalIngestionExecutionRequestFields
+                }
             }
         }
     }
@@ -131,6 +87,10 @@ query listSecrets($input: ListSecretsInput!) {
 
 mutation createSecret($input: CreateSecretInput!) {
     createSecret(input: $input)
+}
+
+mutation updateSecret($input: UpdateSecretInput!) {
+    updateSecret(input: $input)
 }
 
 mutation deleteSecret($urn: String!) {

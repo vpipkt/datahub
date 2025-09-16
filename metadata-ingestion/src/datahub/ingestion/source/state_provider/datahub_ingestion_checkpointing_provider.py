@@ -10,48 +10,46 @@ from datahub.ingestion.api.ingestion_job_checkpointing_provider_base import (
     IngestionCheckpointingProviderConfig,
     JobId,
 )
-from datahub.ingestion.graph.client import DatahubClientConfig, DataHubGraph
+from datahub.ingestion.graph.client import DataHubGraph
+from datahub.ingestion.graph.config import DatahubClientConfig
 from datahub.metadata.schema_classes import DatahubIngestionCheckpointClass
 
 logger = logging.getLogger(__name__)
 
 
 class DatahubIngestionStateProviderConfig(IngestionCheckpointingProviderConfig):
-    datahub_api: Optional[DatahubClientConfig] = DatahubClientConfig()
+    datahub_api: Optional[DatahubClientConfig] = None
 
 
 class DatahubIngestionCheckpointingProvider(IngestionCheckpointingProviderBase):
     orchestrator_name: str = "datahub"
 
-    def __init__(self, graph: DataHubGraph, name: str):
-        super().__init__(name)
+    def __init__(
+        self,
+        graph: DataHubGraph,
+    ):
+        super().__init__(self.__class__.__name__)
         self.graph = graph
         if not self._is_server_stateful_ingestion_capable():
             raise ConfigurationError(
-                "Datahub server is not capable of supporting stateful ingestion."
-                " Please consider upgrading to the latest server version to use this feature."
+                "Datahub server is not capable of supporting stateful ingestion. "
+                "Please consider upgrading to the latest server version to use this feature."
             )
 
     @classmethod
     def create(
-        cls, config_dict: Dict[str, Any], ctx: PipelineContext, name: str
+        cls, config_dict: Dict[str, Any], ctx: PipelineContext
     ) -> "DatahubIngestionCheckpointingProvider":
-        if ctx.graph:
-            # Use the pipeline-level graph if set
-            return cls(ctx.graph, name)
-        elif config_dict is None:
-            raise ConfigurationError("Missing provider configuration.")
+        config = DatahubIngestionStateProviderConfig.parse_obj(config_dict)
+        if config.datahub_api is not None:
+            return cls(DataHubGraph(config.datahub_api))
+        elif ctx.graph:
+            # Use the pipeline-level graph if set.
+            return cls(ctx.graph)
         else:
-            provider_config = (
-                DatahubIngestionStateProviderConfig.parse_obj_allow_extras(config_dict)
+            raise ValueError(
+                "A graph instance is required. Either pass one in the pipeline context, or set it explicitly in the stateful ingestion provider config."
             )
-            if provider_config.datahub_api:
-                graph = DataHubGraph(provider_config.datahub_api)
-                return cls(graph, name)
-            else:
-                raise ConfigurationError(
-                    "Missing datahub_api. Provide either a global one or under the state_provider."
-                )
 
     def _is_server_stateful_ingestion_capable(self) -> bool:
         server_config = self.graph.get_config() if self.graph else None
@@ -73,20 +71,20 @@ class DatahubIngestionCheckpointingProvider(IngestionCheckpointingProviderBase):
             self.orchestrator_name, pipeline_name, job_name
         )
 
-        latest_checkpoint: Optional[
-            DatahubIngestionCheckpointClass
-        ] = self.graph.get_latest_timeseries_value(
-            entity_urn=data_job_urn,
-            aspect_type=DatahubIngestionCheckpointClass,
-            filter_criteria_map={
-                "pipelineName": pipeline_name,
-            },
+        latest_checkpoint: Optional[DatahubIngestionCheckpointClass] = (
+            self.graph.get_latest_timeseries_value(
+                entity_urn=data_job_urn,
+                aspect_type=DatahubIngestionCheckpointClass,
+                filter_criteria_map={
+                    "pipelineName": pipeline_name,
+                },
+            )
         )
         if latest_checkpoint:
             logger.debug(
                 f"The last committed ingestion checkpoint for pipelineName:'{pipeline_name}',"
                 f" job_name:'{job_name}' found with start_time:"
-                f" {datetime.utcfromtimestamp(latest_checkpoint.timestampMillis/1000)}"
+                f" {datetime.utcfromtimestamp(latest_checkpoint.timestampMillis / 1000)}"
             )
             return latest_checkpoint
         else:

@@ -1,11 +1,12 @@
 import { Avatar, Tooltip } from 'antd';
 import { TooltipPlacement } from 'antd/lib/tooltip';
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import styled from 'styled-components';
 
-import defaultAvatar from '../../../images/default_avatar.png';
-import getAvatarColor from './getAvatarColor';
+import getAvatarColor from '@app/shared/avatar/getAvatarColor';
+
+import defaultAvatar from '@images/default_avatar.png';
 
 const AvatarStyled = styled(Avatar)<{ size?: number; $backgroundColor?: string }>`
     color: #fff;
@@ -50,6 +51,8 @@ export default function CustomAvatar({
     isRole = false,
     hideTooltip = false,
 }: Props) {
+    const [imageError, setImageError] = useState(false);
+
     const avatarWithInitial = name ? (
         <AvatarStyled style={style} size={size} $backgroundColor={getAvatarColor(name)}>
             {name.charAt(0).toUpperCase()}
@@ -62,8 +65,19 @@ export default function CustomAvatar({
     ) : (
         avatarWithInitial
     );
+
+    const handleImageError = () => {
+        setImageError(true);
+        // To prevent fallback error handling from Ant Design
+        return false;
+    };
+
     const avatar =
-        photoUrl && photoUrl !== '' ? <AvatarStyled src={photoUrl} style={style} size={size} /> : avatarWithDefault;
+        photoUrl && photoUrl !== '' && !imageError ? (
+            <AvatarStyled src={photoUrl} style={style} size={size} onError={handleImageError} />
+        ) : (
+            avatarWithDefault
+        );
     if (!name) {
         return url ? <Link to={url}>{avatar}</Link> : avatar;
     }

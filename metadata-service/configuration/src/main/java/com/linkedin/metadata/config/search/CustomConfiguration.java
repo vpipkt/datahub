@@ -1,25 +1,32 @@
 package com.linkedin.metadata.config.search;
 
-import com.linkedin.metadata.config.search.custom.CustomSearchConfiguration;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.linkedin.metadata.config.search.custom.CustomSearchConfiguration;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStream;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.FileSystemResource;
 
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.InputStream;
-
-
-@Data
 @Slf4j
+@Data
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor
 public class CustomConfiguration {
   private boolean enabled;
   private String file;
+  private String searchFieldConfigDefault;
+  private String autoCompleteFieldConfigDefault;
 
   /**
-   * Materialize the search configuration from a location external to main application.yml
+   * Materialize the search configuration from a location external to main application.yaml
+   *
    * @param mapper yaml enabled jackson mapper
    * @return search configuration class
    * @throws IOException
@@ -31,9 +38,15 @@ public class CustomConfiguration {
         log.info("Custom search configuration found in classpath: {}", file);
         return mapper.readValue(stream, CustomSearchConfiguration.class);
       } catch (FileNotFoundException e) {
+        log.info("Custom search configuration was NOT found in the classpath.");
         try (InputStream stream = new FileSystemResource(file).getInputStream()) {
           log.info("Custom search configuration found in filesystem: {}", file);
           return mapper.readValue(stream, CustomSearchConfiguration.class);
+        } catch (Exception e2) {
+          log.warn(
+              "Custom search enabled, however there was an error loading configuration: " + file,
+              e2);
+          return null;
         }
       }
     } else {

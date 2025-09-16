@@ -6,10 +6,13 @@ import re
 from typing import Dict, Optional
 
 import click
+import packaging
 import requests
 import yaml
 from packaging.version import parse
 from pydantic import BaseModel
+
+from datahub._version import nice_version_name
 
 logger = logging.getLogger(__name__)
 
@@ -17,10 +20,31 @@ LOCAL_QUICKSTART_MAPPING_FILE = os.environ.get("FORCE_LOCAL_QUICKSTART_MAPPING",
 DEFAULT_LOCAL_CONFIG_PATH = "~/.datahub/quickstart/quickstart_version_mapping.yaml"
 DEFAULT_REMOTE_CONFIG_PATH = "https://raw.githubusercontent.com/datahub-project/datahub/master/docker/quickstart/quickstart_version_mapping.yaml"
 
+MINIMUM_SUPPORTED_VERSION = "v1.1.0"
+
+
+def get_minimum_supported_version_message(version: str) -> str:
+    MINIMUM_SUPPORTED_VERSION_MESSAGE = f"""
+    DataHub CLI Version Compatibility Issue
+
+    You're trying to install DataHub server version {version} which is not supported by this CLI version.
+
+    This CLI (version {nice_version_name()}) only supports installing DataHub server versions {MINIMUM_SUPPORTED_VERSION} and above.
+
+    To install older server versions:
+    1. Uninstall current CLI: pip uninstall acryl-datahub
+    2. Install older CLI: pip install acryl-datahub==1.1
+    3. Run quickstart with your desired version: datahub docker quickstart --version <version>
+
+    For more information: https://docs.datahub.com/docs/quickstart#install-datahub-server
+    """
+    return MINIMUM_SUPPORTED_VERSION_MESSAGE
+
 
 class QuickstartExecutionPlan(BaseModel):
     composefile_git_ref: str
     docker_tag: str
+    mysql_tag: Optional[str] = None
 
 
 def _is_it_a_version(version: str) -> bool:
@@ -54,7 +78,7 @@ class QuickstartVersionMappingConfig(BaseModel):
                 "LOCAL_QUICKSTART_MAPPING_FILE is set, will try to read from local file."
             )
             path = os.path.expanduser(LOCAL_QUICKSTART_MAPPING_FILE)
-            with open(path, "r") as f:
+            with open(path) as f:
                 config_raw = yaml.safe_load(f)
             return cls.parse_obj(config_raw)
 
@@ -69,7 +93,7 @@ class QuickstartVersionMappingConfig(BaseModel):
             )
             try:
                 path = os.path.expanduser(DEFAULT_LOCAL_CONFIG_PATH)
-                with open(path, "r") as f:
+                with open(path) as f:
                     config_raw = yaml.safe_load(f)
             except Exception:
                 logger.debug("Couldn't read from local file either.")
@@ -81,7 +105,7 @@ class QuickstartVersionMappingConfig(BaseModel):
             return QuickstartVersionMappingConfig(
                 quickstart_version_map={
                     "default": QuickstartExecutionPlan(
-                        composefile_git_ref="master", docker_tag="head"
+                        composefile_git_ref="master", docker_tag="head", mysql_tag="8.2"
                     ),
                 }
             )
@@ -93,7 +117,7 @@ class QuickstartVersionMappingConfig(BaseModel):
             try:
                 release = cls._fetch_latest_version()
                 config.quickstart_version_map["stable"] = QuickstartExecutionPlan(
-                    composefile_git_ref=release, docker_tag=release
+                    composefile_git_ref=release, docker_tag=release, mysql_tag="8.2"
                 )
             except Exception:
                 click.echo(
@@ -103,7 +127,8 @@ class QuickstartVersionMappingConfig(BaseModel):
         return config
 
     def get_quickstart_execution_plan(
-        self, requested_version: Optional[str]
+        self,
+        requested_version: Optional[str],
     ) -> QuickstartExecutionPlan:
         """
         From the requested version and stable flag, returns the execution plan for the quickstart.
@@ -114,21 +139,33 @@ class QuickstartVersionMappingConfig(BaseModel):
             requested_version = "default"
         composefile_git_ref = requested_version
         docker_tag = requested_version
+        # Default to 8.2 if not specified in version map
+        mysql_tag = "8.2"
         result = self.quickstart_version_map.get(
             requested_version,
             QuickstartExecutionPlan(
-                composefile_git_ref=composefile_git_ref, docker_tag=docker_tag
+                composefile_git_ref=composefile_git_ref,
+                docker_tag=docker_tag,
+                mysql_tag=str(mysql_tag),
             ),
         )
+
+        if not is_minimum_supported_version(requested_version):
+            click.secho(
+                get_minimum_supported_version_message(version=requested_version),
+                fg="red",
+            )
+            raise click.ClickException("Minimum supported version not met")
+
         # new CLI version is downloading the composefile corresponding to the requested version
-        # if the version is older than v0.10.1, it doesn't contain the setup job labels and the
-        # the checks will fail, so in those cases we pick the composefile from v0.10.1 which contains
-        # the setup job labels
+        # if the version is older than <MINIMUM_SUPPORTED_VERSION>, it doesn't contain the
+        # docker compose based resolved compose file. In those cases, we pick up the composefile from
+        # MINIMUM_SUPPORTED_VERSION which contains the compose file.
         if _is_it_a_version(result.composefile_git_ref):
-            if parse("v0.10.1") > parse(result.composefile_git_ref):
-                # The merge commit where the labels were added
-                # https://github.com/datahub-project/datahub/pull/7473
-                result.composefile_git_ref = "1d3339276129a7cb8385c07a958fcc93acda3b4e"
+            if parse("v1.2.0") > parse(result.composefile_git_ref):
+                # The merge commit where profiles based resolved compose file was added.
+                # https://github.com/datahub-project/datahub/pull/13566
+                result.composefile_git_ref = "21726bc3341490f4182b904626c793091ac95edd"
 
         return result
 
@@ -142,3 +179,15 @@ def save_quickstart_config(
     with open(path, "w") as f:
         yaml.dump(config.dict(), f)
     logger.info(f"Saved quickstart config to {path}.")
+
+
+def is_minimum_supported_version(version: str) -> bool:
+    if not _is_it_a_version(version):
+        return True
+
+    requested_version = packaging.version.parse(version)
+    minimum_supported_version = packaging.version.parse(MINIMUM_SUPPORTED_VERSION)
+    if requested_version < minimum_supported_version:
+        return False
+
+    return True

@@ -1,12 +1,16 @@
 import { CloseCircleOutlined } from '@ant-design/icons';
-import { Button, Typography } from 'antd';
+import { Button } from 'antd';
 import React from 'react';
 import styled from 'styled-components';
-import { FacetFilterInput, FacetMetadata } from '../../../types.generated';
-import { ANTD_GRAY } from '../../entity/shared/constants';
-import { useEntityRegistry } from '../../useEntityRegistry';
-import { getFilterEntity, getFilterIconAndLabel, getNewFilters } from './utils';
-import useGetBrowseV2LabelOverride from './useGetBrowseV2LabelOverride';
+
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+import { useFilterRendererRegistry } from '@app/search/filters/render/useFilterRenderer';
+import { IconSpacer, Label } from '@app/search/filters/styledComponents';
+import useGetBrowseV2LabelOverride from '@app/search/filters/useGetBrowseV2LabelOverride';
+import { getFilterEntity, getFilterIconAndLabel, getNewFilters } from '@app/search/filters/utils';
+import { useEntityRegistry } from '@app/useEntityRegistry';
+
+import { FacetFilterInput, FacetMetadata } from '@types';
 
 const ActiveFilterWrapper = styled.div`
     border: 1px solid ${ANTD_GRAY[5]};
@@ -17,14 +21,6 @@ const ActiveFilterWrapper = styled.div`
     font-size: 14px;
     height: 24px;
     margin: 8px 8px 0 0;
-`;
-
-export const Label = styled(Typography.Text)`
-    max-width: 125px;
-`;
-
-export const IconSpacer = styled.span`
-    width: 4px;
 `;
 
 const StyledButton = styled(Button)`
@@ -54,14 +50,23 @@ function ActiveFilter({
     const entityRegistry = useEntityRegistry();
     const filterEntity = getFilterEntity(filterFacet.field, filterValue, availableFilters);
     const filterLabelOverride = useGetBrowseV2LabelOverride(filterFacet.field, filterValue, entityRegistry);
-    const { icon, label } = getFilterIconAndLabel(
-        filterFacet.field,
-        filterValue,
-        entityRegistry,
-        filterEntity,
-        12,
-        filterLabelOverride,
-    );
+    const filterRenderer = useFilterRendererRegistry();
+    const facetEntity = availableFilters?.find((f) => f.field === filterFacet.field)?.entity;
+
+    const { icon, label } = !filterRenderer.hasRenderer(filterFacet.field)
+        ? getFilterIconAndLabel(
+              filterFacet.field,
+              filterValue,
+              entityRegistry,
+              filterEntity,
+              12,
+              filterLabelOverride,
+              facetEntity,
+          )
+        : {
+              icon: filterRenderer.getIcon(filterFacet.field),
+              label: filterRenderer.getValueLabel(filterFacet.field, filterValue),
+          };
 
     function removeFilter() {
         const newFilterValues = filterFacet.values?.filter((value) => value !== filterValue) || [];

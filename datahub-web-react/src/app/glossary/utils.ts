@@ -1,5 +1,7 @@
-import { EntityType } from '../../types.generated';
-import { GenericEntityProperties } from '../entity/shared/types';
+import EntityRegistry from '@app/entity/EntityRegistry';
+import { GenericEntityProperties } from '@app/entity/shared/types';
+
+import { Entity, EntityType } from '@types';
 
 export const ROOT_NODES = 'rootNodes';
 export const ROOT_TERMS = 'rootTerms';
@@ -11,8 +13,8 @@ export function getGlossaryRootToUpdate(entityType: EntityType) {
 // Get the urns or special constants for root nodes or terms (above) that need to be refreshed in the Glossary
 // sidebar when making updates (edit name, create term/term group, delete term/term group, move entity)
 export function getParentNodeToUpdate(entityData: GenericEntityProperties | null, entityType: EntityType) {
-    return entityData?.parentNodes?.nodes.length
-        ? entityData?.parentNodes?.nodes[0].urn
+    return entityData?.parentNodes?.nodes?.length
+        ? entityData?.parentNodes?.nodes[0]?.urn
         : getGlossaryRootToUpdate(entityType);
 }
 
@@ -24,4 +26,9 @@ export function updateGlossarySidebar(
     setUrnsToUpdate: (updatdUrns: string[]) => void,
 ) {
     setUrnsToUpdate([...urnsToUpdate, ...parentNodesToUpdate]);
+}
+
+export function getParentGlossary<T extends Entity>(node: T, entityRegistry: EntityRegistry) {
+    const props = entityRegistry.getGenericEntityProperties(EntityType.GlossaryNode, node);
+    return props?.parentNodes?.nodes ?? [];
 }

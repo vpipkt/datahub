@@ -1,9 +1,11 @@
-import { computeLines } from '../TimeSeriesChart';
+import { computeLines } from '@app/analyticsDashboard/components/TimeSeriesChart';
+
+import { DateInterval, TimeSeriesChart } from '@types';
 
 describe('timeSeriesChart', () => {
     describe('computeLines', () => {
         it('compute lines works works correctly for weekly case', () => {
-            const chartData = {
+            const chartData: TimeSeriesChart = {
                 title: 'Weekly Active Users',
                 lines: [
                     {
@@ -15,7 +17,7 @@ describe('timeSeriesChart', () => {
                     start: '1672012800000',
                     end: '1677369600000',
                 },
-                interval: 'WEEK',
+                interval: DateInterval.Week,
             };
             const result = computeLines(chartData, true);
             expect(result[0]).toEqual({
@@ -35,7 +37,7 @@ describe('timeSeriesChart', () => {
         });
 
         it('compute lines works works correctly for monthly case', () => {
-            const chartData = {
+            const chartData: TimeSeriesChart = {
                 title: 'Weekly Active Users',
                 lines: [
                     {
@@ -51,7 +53,7 @@ describe('timeSeriesChart', () => {
                     start: '1648771200000',
                     end: '1680307199999',
                 },
-                interval: 'MONTH',
+                interval: DateInterval.Month,
             };
             const result = computeLines(chartData, true);
             expect(result[0]).toEqual({

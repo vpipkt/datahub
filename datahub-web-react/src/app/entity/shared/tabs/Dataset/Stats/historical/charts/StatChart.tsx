@@ -1,10 +1,12 @@
 import { Card, Typography } from 'antd';
 import React, { useMemo } from 'react';
 import styled from 'styled-components';
-import { DateInterval, DateRange } from '../../../../../../../../types.generated';
-import { ChartContainer } from '../../../../../../../analyticsDashboard/components/ChartContainer';
-import { TimeSeriesChart } from '../../../../../../../analyticsDashboard/components/TimeSeriesChart';
-import { ANTD_GRAY } from '../../../../../constants';
+
+import { ChartContainer } from '@app/analyticsDashboard/components/ChartContainer';
+import { TimeSeriesChart } from '@app/analyticsDashboard/components/TimeSeriesChart';
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+
+import { DateInterval, DateRange } from '@types';
 
 const ChartTitle = styled(Typography.Text)`
     && {
@@ -16,7 +18,7 @@ const ChartTitle = styled(Typography.Text)`
 
 const ChartCard = styled(Card)<{ visible: boolean }>`
     box-shadow: ${(props) => props.theme.styles['box-shadow']};
-    visibility: ${(props) => (props.visible ? 'visible' : 'hidden')}; ;
+    visibility: ${(props) => (props.visible ? 'visible' : 'hidden')};
 `;
 
 type Point = {
@@ -87,7 +89,7 @@ export default function StatChart({ title, values, tickInterval: interval, dateR
                     }}
                     width={360}
                     height={300}
-                    yScale={{ type: 'linear', includeZero: false }}
+                    yScale={{ type: 'linear', zero: false }}
                     yAxis={yAxis}
                 />
             </ChartContainer>

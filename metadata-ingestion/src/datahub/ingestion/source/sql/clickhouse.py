@@ -5,12 +5,11 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple, Union
 
-import clickhouse_driver  # noqa: F401
+import clickhouse_driver
 import clickhouse_sqlalchemy.types as custom_types
 import pydantic
 from clickhouse_sqlalchemy.drivers import base
 from clickhouse_sqlalchemy.drivers.base import ClickHouseDialect
-from pydantic.class_validators import root_validator
 from pydantic.fields import Field
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import reflection
@@ -19,9 +18,9 @@ from sqlalchemy.sql import sqltypes
 from sqlalchemy.types import BOOLEAN, DATE, DATETIME, INTEGER
 
 import datahub.emitter.mce_builder as builder
-from datahub.configuration.pydantic_field_deprecation import pydantic_field_deprecated
 from datahub.configuration.source_common import DatasetLineageProviderConfigBase
 from datahub.configuration.time_window_config import BaseTimeWindowConfig
+from datahub.configuration.validate_field_deprecation import pydantic_field_deprecated
 from datahub.emitter import mce_builder
 from datahub.emitter.mcp import MetadataChangeProposalWrapper
 from datahub.ingestion.api.decorators import (
@@ -33,12 +32,12 @@ from datahub.ingestion.api.decorators import (
     support_status,
 )
 from datahub.ingestion.api.workunit import MetadataWorkUnit
+from datahub.ingestion.source.common.subtypes import SourceCapabilityModifier
 from datahub.ingestion.source.sql.sql_common import (
     SqlWorkUnit,
     logger,
     register_custom_type,
 )
-from datahub.ingestion.source.sql.sql_config import make_sqlalchemy_uri
 from datahub.ingestion.source.sql.two_tier_sql_source import (
     TwoTierSQLAlchemyConfig,
     TwoTierSQLAlchemySource,
@@ -55,10 +54,11 @@ from datahub.metadata.com.linkedin.pegasus2avro.schema import (
 )
 from datahub.metadata.schema_classes import (
     DatasetLineageTypeClass,
-    DatasetPropertiesClass,
     DatasetSnapshotClass,
     UpstreamClass,
 )
+
+assert clickhouse_driver
 
 # adding extra types not handled by clickhouse-sqlalchemy 0.1.8
 base.ischema_names["DateTime64(0)"] = DATETIME
@@ -127,8 +127,8 @@ class ClickHouseConfig(
     TwoTierSQLAlchemyConfig, BaseTimeWindowConfig, DatasetLineageProviderConfigBase
 ):
     # defaults
-    host_port = Field(default="localhost:8123", description="ClickHouse host URL.")
-    scheme = Field(default="clickhouse", description="", hidden_from_docs=True)
+    host_port: str = Field(default="localhost:8123", description="ClickHouse host URL.")
+    scheme: str = Field(default="clickhouse", description="", hidden_from_docs=True)
     password: pydantic.SecretStr = Field(
         default=pydantic.SecretStr(""), description="password"
     )
@@ -146,8 +146,11 @@ class ClickHouseConfig(
     )
     include_materialized_views: Optional[bool] = Field(default=True, description="")
 
-    def get_sql_alchemy_url(self, current_db=None):
-
+    def get_sql_alchemy_url(
+        self,
+        uri_opts: Optional[Dict[str, Any]] = None,
+        current_db: Optional[str] = None,
+    ) -> str:
         url = make_url(
             super().get_sql_alchemy_url(uri_opts=self.uri_opts, current_db=current_db)
         )
@@ -158,47 +161,16 @@ class ClickHouseConfig(
             )
 
         # We can setup clickhouse ingestion in sqlalchemy_uri form and config form.
-
-        # If we use sqlalchemu_uri form then super().get_sql_alchemy_url doesn't
-        # update current_db because it return self.sqlalchemy_uri without any update.
-        # This code bellow needed for rewriting sqlalchemi_uri and replace database with current_db.from
-        # For the future without python3.7 and sqlalchemy 1.3 support we can use code
-        # url=url.set(db=current_db), but not now.
-
         # Why we need to update database in uri at all?
         # Because we get database from sqlalchemy inspector and inspector we form from url inherited from
         # TwoTierSQLAlchemySource and SQLAlchemySource
-
         if self.sqlalchemy_uri and current_db:
-            self.scheme = url.drivername
-            self.username = url.username
-            self.password = (
-                pydantic.SecretStr(str(url.password))
-                if url.password
-                else pydantic.SecretStr("")
-            )
-            if url.host and url.port:
-                self.host_port = url.host + ":" + str(url.port)
-            elif url.host:
-                self.host_port = url.host
-            # untill released https://github.com/python/mypy/pull/15174
-            self.uri_opts = {str(k): str(v) for (k, v) in url.query.items()}
-
-            url = make_url(
-                make_sqlalchemy_uri(
-                    self.scheme,
-                    self.username,
-                    self.password.get_secret_value() if self.password else None,
-                    self.host_port,
-                    current_db if current_db else self.database,
-                    uri_opts=self.uri_opts,
-                )
-            )
+            url = url.set(database=current_db)
 
         return str(url)
 
     # pre = True because we want to take some decision before pydantic initialize the configuration to default values
-    @root_validator(pre=True)
+    @pydantic.root_validator(pre=True)
     def projects_backward_compatibility(cls, values: Dict) -> Dict:
         secure = values.get("secure")
         protocol = values.get("protocol")
@@ -250,9 +222,7 @@ def _get_all_table_comments_and_properties(self, connection, **kw):
              , comment
              , {properties_clause} AS properties
           FROM system.tables
-         WHERE name NOT LIKE '.inner%'""".format(
-            properties_clause=properties_clause
-        )
+         WHERE name NOT LIKE '.inner%'""".format(properties_clause=properties_clause)
     )
 
     all_table_comments: Dict[Tuple[str, str], Dict[str, Any]] = {}
@@ -261,9 +231,11 @@ def _get_all_table_comments_and_properties(self, connection, **kw):
     for table in result:
         all_table_comments[(table.database, table.table_name)] = {
             "text": table.comment,
-            "properties": {k: str(v) for k, v in json.loads(table.properties).items()}
-            if table.properties
-            else {},
+            "properties": (
+                {k: str(v) for k, v in json.loads(table.properties).items()}
+                if table.properties
+                else {}
+            ),
         }
     return all_table_comments
 
@@ -298,7 +270,7 @@ def _get_table_or_view_names(self, relkind, connection, schema=None, **kw):
     info_cache = kw.get("info_cache")
     all_relations = self._get_all_relation_info(connection, info_cache=info_cache)
     relation_names = []
-    for key, relation in all_relations.items():
+    for _, relation in all_relations.items():
         if relation.database == schema and relation.relkind == relkind:
             relation_names.append(relation.relname)
     return relation_names
@@ -318,7 +290,7 @@ def get_view_names(self, connection, schema=None, **kw):
 # when reflecting schema for multiple tables at once.
 @reflection.cache  # type: ignore
 def _get_schema_column_info(self, connection, schema=None, **kw):
-    schema_clause = "database = '{schema}'".format(schema=schema) if schema else "1"
+    schema_clause = f"database = '{schema}'" if schema else "1"
     all_columns = defaultdict(list)
     result = connection.execute(
         text(
@@ -331,9 +303,7 @@ def _get_schema_column_info(self, connection, schema=None, **kw):
              , comment
           FROM system.columns
          WHERE {schema_clause}
-         ORDER BY database, table, position""".format(
-                    schema_clause=schema_clause
-                )
+         ORDER BY database, table, position""".format(schema_clause=schema_clause)
             )
         )
     )
@@ -378,7 +348,7 @@ def _get_column_info(self, name, format_type, comment):
 @reflection.cache  # type: ignore
 def get_columns(self, connection, table_name, schema=None, **kw):
     if not schema:
-        query = "DESCRIBE TABLE {}".format(self._quote_table_name(table_name))
+        query = f"DESCRIBE TABLE {self._quote_table_name(table_name)}"
         cols = self._execute(connection, query)
     else:
         cols = self._get_clickhouse_columns(connection, table_name, schema, **kw)
@@ -410,8 +380,18 @@ clickhouse_datetime_format = "%Y-%m-%d %H:%M:%S"
 @platform_name("ClickHouse")
 @config_class(ClickHouseConfig)
 @support_status(SupportStatus.CERTIFIED)
-@capability(SourceCapability.DELETION_DETECTION, "Enabled via stateful ingestion")
+@capability(
+    SourceCapability.DELETION_DETECTION, "Enabled by default via stateful ingestion"
+)
 @capability(SourceCapability.DATA_PROFILING, "Optionally enabled via configuration")
+@capability(
+    SourceCapability.LINEAGE_COARSE,
+    "Enabled by default to get lineage for views via `include_view_lineage`",
+    subtype_modifier=[
+        SourceCapabilityModifier.VIEW,
+        SourceCapabilityModifier.TABLE,
+    ],
+)
 class ClickHouseSource(TwoTierSQLAlchemySource):
     """
     This plugin extracts the following:
@@ -452,40 +432,10 @@ class ClickHouseSource(TwoTierSQLAlchemySource):
                 dataset_snapshot: DatasetSnapshotClass = wu.metadata.proposedSnapshot
                 assert dataset_snapshot
 
-                lineage_mcp, lineage_properties_aspect = self.get_lineage_mcp(
-                    wu.metadata.proposedSnapshot.urn
-                )
+                lineage_mcp = self.get_lineage_mcp(wu.metadata.proposedSnapshot.urn)
 
                 if lineage_mcp is not None:
                     yield lineage_mcp.as_workunit()
-
-                if lineage_properties_aspect:
-                    aspects = dataset_snapshot.aspects
-                    if aspects is None:
-                        aspects = []
-
-                    dataset_properties_aspect: Optional[DatasetPropertiesClass] = None
-
-                    for aspect in aspects:
-                        if isinstance(aspect, DatasetPropertiesClass):
-                            dataset_properties_aspect = aspect
-
-                    if dataset_properties_aspect is None:
-                        dataset_properties_aspect = DatasetPropertiesClass()
-                        aspects.append(dataset_properties_aspect)
-
-                    custom_properties = (
-                        {
-                            **dataset_properties_aspect.customProperties,
-                            **lineage_properties_aspect.customProperties,
-                        }
-                        if dataset_properties_aspect.customProperties
-                        else lineage_properties_aspect.customProperties
-                    )
-                    dataset_properties_aspect.customProperties = custom_properties
-                    dataset_snapshot.aspects = aspects
-
-                    dataset_snapshot.aspects.append(dataset_properties_aspect)
 
             # Emit the work unit from super.
             yield wu
@@ -504,7 +454,7 @@ class ClickHouseSource(TwoTierSQLAlchemySource):
         logger.debug(f"sql_alchemy_url={url}")
         engine = create_engine(url, **self.config.options)
         for db_row in engine.execute(text(all_tables_query)):
-            all_tables_set.add(f'{db_row["database"]}.{db_row["table_name"]}')
+            all_tables_set.add(f"{db_row['database']}.{db_row['table_name']}")
 
         return all_tables_set
 
@@ -533,15 +483,17 @@ class ClickHouseSource(TwoTierSQLAlchemySource):
 
         try:
             for db_row in engine.execute(text(query)):
-                if not self.config.schema_pattern.allowed(
+                dataset_name = f"{db_row['target_schema']}.{db_row['target_table']}"
+                if not self.config.database_pattern.allowed(
                     db_row["target_schema"]
-                ) or not self.config.table_pattern.allowed(db_row["target_table"]):
+                ) or not self.config.table_pattern.allowed(dataset_name):
+                    self.report.report_dropped(dataset_name)
                     continue
 
                 # Target
                 target_path = (
-                    f'{self.config.platform_instance+"." if self.config.platform_instance else ""}'
-                    f'{db_row["target_schema"]}.{db_row["target_table"]}'
+                    f"{self.config.platform_instance + '.' if self.config.platform_instance else ''}"
+                    f"{dataset_name}"
                 )
                 target = LineageItem(
                     dataset=LineageDataset(
@@ -553,7 +505,7 @@ class ClickHouseSource(TwoTierSQLAlchemySource):
 
                 # Source
                 platform = LineageDatasetPlatform.CLICKHOUSE
-                path = f'{db_row["source_schema"]}.{db_row["source_table"]}'
+                path = f"{db_row['source_schema']}.{db_row['source_table']}"
 
                 sources = [
                     LineageDataset(
@@ -580,9 +532,7 @@ class ClickHouseSource(TwoTierSQLAlchemySource):
                         target.dataset.path
                     ].upstreams = self._lineage_map[
                         target.dataset.path
-                    ].upstreams.union(
-                        target.upstreams
-                    )
+                    ].upstreams.union(target.upstreams)
 
                 else:
                     self._lineage_map[target.dataset.path] = target
@@ -690,19 +640,16 @@ class ClickHouseSource(TwoTierSQLAlchemySource):
 
     def get_lineage_mcp(
         self, dataset_urn: str
-    ) -> Tuple[
-        Optional[MetadataChangeProposalWrapper], Optional[DatasetPropertiesClass]
-    ]:
+    ) -> Optional[MetadataChangeProposalWrapper]:
         dataset_key = mce_builder.dataset_urn_to_key(dataset_urn)
         if dataset_key is None:
-            return None, None
+            return None
 
         if not self._lineage_map:
             self._populate_lineage()
         assert self._lineage_map is not None
 
         upstream_lineage: List[UpstreamClass] = []
-        custom_properties: Dict[str, str] = {}
 
         if dataset_key.name in self._lineage_map:
             item = self._lineage_map[dataset_key.name]
@@ -718,16 +665,12 @@ class ClickHouseSource(TwoTierSQLAlchemySource):
                 )
                 upstream_lineage.append(upstream_table)
 
-        properties = None
-        if custom_properties:
-            properties = DatasetPropertiesClass(customProperties=custom_properties)
-
         if not upstream_lineage:
-            return None, properties
+            return None
 
         mcp = MetadataChangeProposalWrapper(
             entityUrn=dataset_urn,
             aspect=UpstreamLineage(upstreams=upstream_lineage),
         )
 
-        return mcp, properties
+        return mcp

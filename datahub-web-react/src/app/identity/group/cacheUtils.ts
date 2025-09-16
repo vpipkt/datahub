@@ -1,4 +1,4 @@
-import { ListGroupsDocument, ListGroupsQuery } from '../../../graphql/group.generated';
+import { ListGroupsDocument, ListGroupsQuery } from '@graphql/group.generated';
 
 export const DEFAULT_GROUP_LIST_PAGE_SIZE = 25;
 
@@ -44,6 +44,10 @@ const createFullGroup = (baseGroup) => {
             email: null,
         },
         memberCount: null,
+        roles: null,
+        editableProperties: {
+            pictureLink: null,
+        },
     };
 };
 

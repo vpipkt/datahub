@@ -1,34 +1,36 @@
 package com.linkedin.metadata.search.elasticsearch.update;
 
 import com.linkedin.metadata.utils.metrics.MetricUtils;
-import lombok.extern.slf4j.Slf4j;
-import org.elasticsearch.action.DocWriteRequest;
-import org.elasticsearch.action.bulk.BulkProcessor;
-import org.elasticsearch.action.bulk.BulkRequest;
-import org.elasticsearch.action.bulk.BulkResponse;
-import org.elasticsearch.action.support.WriteRequest;
-
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
-
+import lombok.extern.slf4j.Slf4j;
+import org.opensearch.action.DocWriteRequest;
+import org.opensearch.action.bulk.BulkProcessor;
+import org.opensearch.action.bulk.BulkRequest;
+import org.opensearch.action.bulk.BulkResponse;
+import org.opensearch.action.support.WriteRequest;
 
 @Slf4j
 public class BulkListener implements BulkProcessor.Listener {
   private static final Map<WriteRequest.RefreshPolicy, BulkListener> INSTANCES = new HashMap<>();
 
-  public static BulkListener getInstance() {
-    return INSTANCES.computeIfAbsent(null, BulkListener::new);
+  public static BulkListener getInstance(MetricUtils metricUtils) {
+    return INSTANCES.computeIfAbsent(null, p -> new BulkListener(p, metricUtils));
   }
-  public static BulkListener getInstance(WriteRequest.RefreshPolicy refreshPolicy) {
-    return INSTANCES.computeIfAbsent(refreshPolicy, BulkListener::new);
+
+  public static BulkListener getInstance(
+      WriteRequest.RefreshPolicy refreshPolicy, MetricUtils metricUtils) {
+    return INSTANCES.computeIfAbsent(refreshPolicy, p -> new BulkListener(p, metricUtils));
   }
 
   private final WriteRequest.RefreshPolicy refreshPolicy;
+  private final MetricUtils metricUtils;
 
-  public BulkListener(WriteRequest.RefreshPolicy policy) {
+  public BulkListener(WriteRequest.RefreshPolicy policy, MetricUtils metricUtils) {
     refreshPolicy = policy;
+    this.metricUtils = metricUtils;
   }
 
   @Override
@@ -40,12 +42,34 @@ public class BulkListener implements BulkProcessor.Listener {
 
   @Override
   public void afterBulk(long executionId, BulkRequest request, BulkResponse response) {
+    String ingestTook = "";
+    long ingestTookInMillis = response.getIngestTookInMillis();
+    if (ingestTookInMillis != BulkResponse.NO_INGEST_TOOK) {
+      ingestTook = " Bulk ingest preprocessing took time ms: " + ingestTookInMillis;
+    }
+
     if (response.hasFailures()) {
-      log.error("Failed to feed bulk request. Number of events: " + response.getItems().length + " Took time ms: "
-              + response.getIngestTookInMillis() + " Message: " + response.buildFailureMessage());
+      log.error(
+          "Failed to feed bulk request "
+              + executionId
+              + "."
+              + " Number of events: "
+              + response.getItems().length
+              + " Took time ms: "
+              + response.getTook().getMillis()
+              + ingestTook
+              + " Message: "
+              + response.buildFailureMessage());
     } else {
-      log.info("Successfully fed bulk request. Number of events: " + response.getItems().length + " Took time ms: "
-              + response.getIngestTookInMillis());
+      log.info(
+          "Successfully fed bulk request "
+              + executionId
+              + "."
+              + " Number of events: "
+              + response.getItems().length
+              + " Took time ms: "
+              + response.getTook().getMillis()
+              + ingestTook);
     }
     incrementMetrics(response);
   }
@@ -53,20 +77,28 @@ public class BulkListener implements BulkProcessor.Listener {
   @Override
   public void afterBulk(long executionId, BulkRequest request, Throwable failure) {
     // Exception raised outside this method
-    log.error("Error feeding bulk request. No retries left. Request: {}", buildBulkRequestSummary(request), failure);
+    log.error(
+        "Error feeding bulk request {}. No retries left. Request: {}",
+        executionId,
+        buildBulkRequestSummary(request),
+        failure);
     incrementMetrics(request, failure);
   }
 
-  private static void incrementMetrics(BulkResponse response) {
-    Arrays.stream(response.getItems())
-            .map(req -> buildMetricName(req.getOpType(), req.status().name()))
-            .forEach(metricName -> MetricUtils.counter(BulkListener.class, metricName).inc());
+  private void incrementMetrics(BulkResponse response) {
+    if (metricUtils != null)
+      Arrays.stream(response.getItems())
+          .map(req -> buildMetricName(req.getOpType(), req.status().name()))
+          .forEach(metricName -> metricUtils.increment(BulkListener.class, metricName, 1));
   }
 
-  private static void incrementMetrics(BulkRequest request, Throwable failure) {
-    request.requests().stream()
-            .map(req -> buildMetricName(req.opType(), "exception"))
-            .forEach(metricName -> MetricUtils.exceptionCounter(BulkListener.class, metricName, failure));
+  private void incrementMetrics(BulkRequest request, Throwable failure) {
+    if (metricUtils != null)
+      request.requests().stream()
+          .map(req -> buildMetricName(req.opType(), "exception"))
+          .forEach(
+              metricName ->
+                  metricUtils.exceptionIncrement(BulkListener.class, metricName, failure));
   }
 
   private static String buildMetricName(DocWriteRequest.OpType opType, String status) {
@@ -74,9 +106,12 @@ public class BulkListener implements BulkProcessor.Listener {
   }
 
   public static String buildBulkRequestSummary(BulkRequest request) {
-    return request.requests().stream().map(req -> String.format(
-            "Failed to perform bulk request: index [%s], optype: [%s], type [%s], id [%s]",
-            req.index(), req.opType(), req.type(), req.id())
-    ).collect(Collectors.joining(";"));
+    return request.requests().stream()
+        .map(
+            req ->
+                String.format(
+                    "Failed to perform bulk request: index [%s], optype: [%s], type [%s], id [%s]",
+                    req.index(), req.opType(), req.opType(), req.id()))
+        .collect(Collectors.joining(";"));
   }
 }

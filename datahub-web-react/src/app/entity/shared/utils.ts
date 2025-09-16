@@ -1,10 +1,9 @@
-import * as QueryString from 'query-string';
 import { Maybe } from 'graphql/jsutils/Maybe';
 
-import { Entity, EntityType, MatchedField, EntityRelationshipsResult, DataProduct } from '../../../types.generated';
-import { capitalizeFirstLetterOnly } from '../../shared/textUtil';
-import { FIELDS_TO_HIGHLIGHT } from '../dataset/search/highlights';
-import { GenericEntityProperties } from './types';
+import { GenericEntityProperties } from '@app/entity/shared/types';
+import { capitalizeFirstLetterOnly } from '@app/shared/textUtil';
+
+import { DataProduct, Entity, EntityRelationshipsResult, EntityType, PropertyValue } from '@types';
 
 export function dictToQueryStringParams(params: Record<string, string | boolean>) {
     return Object.keys(params)
@@ -87,46 +86,6 @@ export const isListSubset = (l1, l2): boolean => {
     return l1.every((result) => l2.indexOf(result) >= 0);
 };
 
-function normalize(value: string) {
-    return value.trim().toLowerCase();
-}
-
-function fromQueryGetBestMatch(selectedMatchedFields: MatchedField[], rawQuery: string) {
-    const query = normalize(rawQuery);
-    // first lets see if there's an exact match between a field value and the query
-    const exactMatch = selectedMatchedFields.find((field) => normalize(field.value) === query);
-    if (exactMatch) {
-        return exactMatch;
-    }
-
-    // if no exact match exists, we'll see if the entire query is contained in any of the values
-    const containedMatch = selectedMatchedFields.find((field) => normalize(field.value).includes(query));
-    if (containedMatch) {
-        return containedMatch;
-    }
-
-    // otherwise, just return whichever is first
-    return selectedMatchedFields[0];
-}
-
-export const getMatchPrioritizingPrimary = (
-    matchedFields: MatchedField[],
-    primaryField: string,
-): MatchedField | undefined => {
-    const { location } = window;
-    const params = QueryString.parse(location.search, { arrayFormat: 'comma' });
-    const query: string = decodeURIComponent(params.query ? (params.query as string) : '');
-
-    const primaryMatches = matchedFields.filter((field) => field.name === primaryField);
-    if (primaryMatches.length > 0) {
-        return fromQueryGetBestMatch(primaryMatches, query);
-    }
-
-    const matchesThatShouldBeShownOnFE = matchedFields.filter((field) => FIELDS_TO_HIGHLIGHT.has(field.name));
-
-    return fromQueryGetBestMatch(matchesThatShouldBeShownOnFE, query);
-};
-
 function getGraphqlErrorCode(e) {
     if (e.graphQLErrors && e.graphQLErrors.length) {
         const firstError = e.graphQLErrors[0];
@@ -156,9 +115,9 @@ export function getFineGrainedLineageWithSiblings(
     const fineGrainedLineages = [
         ...(entityData?.fineGrainedLineages || entityData?.inputOutput?.fineGrainedLineages || []),
     ];
-    entityData?.siblings?.siblings?.forEach((sibling) => {
-        if (sibling) {
-            const genericSiblingProps = getGenericEntityProperties(sibling.type, sibling);
+    entityData?.siblingsSearch?.searchResults?.forEach((sibling) => {
+        if (sibling.entity) {
+            const genericSiblingProps = getGenericEntityProperties(sibling.entity.type, sibling.entity);
             if (genericSiblingProps && genericSiblingProps.fineGrainedLineages) {
                 fineGrainedLineages.push(...genericSiblingProps.fineGrainedLineages);
             }
@@ -171,4 +130,95 @@ export function getDataProduct(dataProductResult: Maybe<EntityRelationshipsResul
         return dataProductResult.relationships[0].entity as DataProduct;
     }
     return null;
+}
+
+export function getStructuredPropertyValue(value: PropertyValue) {
+    if (value.__typename === 'StringValue') {
+        return value.stringValue;
+    }
+    if (value.__typename === 'NumberValue') {
+        return value.numberValue;
+    }
+    return null;
+}
+
+// Utility for formatting any casing of type to the expected casing for the API
+export function formatEntityType(type: string): string {
+    if (!type) return '';
+
+    switch (type.toLowerCase()) {
+        case 'dataset':
+            return EntityType.Dataset;
+        case 'role':
+            return EntityType.Role;
+        case 'corpuser':
+            return EntityType.CorpUser;
+        case 'corpgroup':
+            return EntityType.CorpGroup;
+        case 'dataplatform':
+            return EntityType.DataPlatform;
+        case 'dashboard':
+            return EntityType.Dashboard;
+        case 'chart':
+            return EntityType.Chart;
+        case 'tag':
+            return EntityType.Tag;
+        case 'dataflow':
+            return EntityType.DataFlow;
+        case 'datajob':
+            return EntityType.DataJob;
+        case 'glossaryterm':
+            return EntityType.GlossaryTerm;
+        case 'glossarynode':
+            return EntityType.GlossaryNode;
+        case 'mlmodel':
+            return EntityType.Mlmodel;
+        case 'mlmodelgroup':
+            return EntityType.MlmodelGroup;
+        case 'mlfeaturetable':
+            return EntityType.MlfeatureTable;
+        case 'mlfeature':
+            return EntityType.Mlfeature;
+        case 'mlprimarykey':
+            return EntityType.MlprimaryKey;
+        case 'container':
+            return EntityType.Container;
+        case 'domain':
+            return EntityType.Domain;
+        case 'notebook':
+            return EntityType.Notebook;
+        case 'dataplatforminstance':
+            return EntityType.DataPlatformInstance;
+        case 'test':
+            return EntityType.Test;
+        case 'schemafield':
+            return EntityType.SchemaField;
+
+        // these are const in the java app
+        case 'dataprocessinstance': // Constants.DATA_PROCESS_INSTANCE_ENTITY_NAME
+            return EntityType.DataProcessInstance;
+        case 'datahubview': // Constants.DATAHUB_VIEW_ENTITY_NAME
+            return EntityType.DatahubView;
+        case 'dataproduct': // Constants.DATA_PRODUCT_ENTITY_NAME
+            return EntityType.DataProduct;
+        case 'datahubconnection': // Constants.DATAHUB_CONNECTION_ENTITY_NAME
+            return EntityType.DatahubConnection;
+        case 'structuredproperty': // Constants.STRUCTURED_PROPERTY_ENTITY_NAME
+            return EntityType.StructuredProperty;
+        case 'assertion': // Constants.ASSERTION_ENTITY_NAME
+            return EntityType.Assertion;
+
+        default:
+            return '';
+    }
+}
+
+// Utility for getting entity type from urn if it's in the 3rd position
+export function extractTypeFromUrn(urn: string): EntityType {
+    const regex = /[^:]+:[^:]+:([^:]+):/;
+    const match = urn.match(regex);
+
+    if (match && match[1]) return formatEntityType(match[1]) as EntityType;
+
+    return '' as EntityType;
 }

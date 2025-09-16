@@ -1,22 +1,40 @@
+import { Group } from '@visx/group';
+import { LinkHorizontal } from '@visx/shape';
 import React, { useContext, useEffect, useMemo, useState } from 'react';
-import { Group } from '@vx/group';
-import { LinkHorizontal } from '@vx/shape';
 import styled from 'styled-components';
 
-import { useEntityRegistry } from '../useEntityRegistry';
-import { IconStyleType } from '../entity/Entity';
-import { Direction, VizNode, EntitySelectParams, EntityAndType, UpdatedLineages } from './types';
-import { ANTD_GRAY } from '../entity/shared/constants';
-import { capitalizeFirstLetterOnly } from '../shared/textUtil';
-import { getShortenedTitle, nodeHeightFromTitleLength } from './utils/titleUtils';
-import { LineageExplorerContext } from './utils/LineageExplorerContext';
-import { useGetEntityLineageLazyQuery } from '../../graphql/lineage.generated';
-import { useIsSeparateSiblingsMode } from '../entity/shared/siblingUtils';
-import { centerX, centerY, iconHeight, iconWidth, iconX, iconY, textX, width } from './constants';
-import LineageEntityColumns from './LineageEntityColumns';
-import { convertInputFieldsToSchemaFields } from './utils/columnLineageUtils';
-import ManageLineageMenu from './manage/ManageLineageMenu';
-import { useGetLineageTimeParams } from './utils/useGetLineageTimeParams';
+import { IconStyleType } from '@app/entity/Entity';
+import { ANTD_GRAY } from '@app/entity/shared/constants';
+import { EntityHealth } from '@app/entity/shared/containers/profile/header/EntityHealth';
+import StructuredPropertyBadge, {
+    MAX_PROP_BADGE_WIDTH,
+} from '@app/entity/shared/containers/profile/header/StructuredPropertyBadge';
+import { filterForAssetBadge } from '@app/entity/shared/containers/profile/header/utils';
+import { useIsSeparateSiblingsMode } from '@app/entity/shared/siblingUtils';
+import LineageEntityColumns from '@app/lineage/LineageEntityColumns';
+import {
+    centerX,
+    centerY,
+    healthX,
+    healthY,
+    iconHeight,
+    iconWidth,
+    iconX,
+    iconY,
+    textX,
+    width,
+} from '@app/lineage/constants';
+import ManageLineageMenu from '@app/lineage/manage/ManageLineageMenu';
+import { Direction, EntityAndType, EntitySelectParams, UpdatedLineages, VizNode } from '@app/lineage/types';
+import { LineageExplorerContext } from '@app/lineage/utils/LineageExplorerContext';
+import { convertInputFieldsToSchemaFields } from '@app/lineage/utils/columnLineageUtils';
+import { getShortenedTitle, nodeHeightFromTitleLength } from '@app/lineage/utils/titleUtils';
+import { useGetLineageTimeParams } from '@app/lineage/utils/useGetLineageTimeParams';
+import { capitalizeFirstLetterOnly } from '@app/shared/textUtil';
+import { useEntityRegistry } from '@app/useEntityRegistry';
+
+import { useGetEntityLineageLazyQuery } from '@graphql/lineage.generated';
+import { EntityType } from '@types';
 
 const CLICK_DELAY_THRESHOLD = 1000;
 const DRAG_DISTANCE_THRESHOLD = 20;
@@ -34,6 +52,11 @@ const MultilineTitleText = styled.p`
     font-size: 14px;
     width: 125px;
     word-break: break-all;
+`;
+
+const PropertyBadgeWrapper = styled.div`
+    display: flex;
+    justify-content: flex-end;
 `;
 
 export default function LineageEntityNode({
@@ -70,6 +93,7 @@ export default function LineageEntityNode({
     const [getAsyncEntityLineage, { data: asyncLineageData, loading }] = useGetEntityLineageLazyQuery();
     const isHideSiblingMode = useIsSeparateSiblingsMode();
     const areColumnsCollapsed = !!collapsedColumnsNodes[node?.data?.urn || 'noop'];
+    const isRestricted = node.data.type === EntityType.Restricted;
 
     function fetchEntityLineage() {
         if (node.data.urn) {
@@ -90,6 +114,12 @@ export default function LineageEntityNode({
             }
         }
     }
+
+    const centerEntity = () => {
+        if (!isRestricted) {
+            onEntityCenter({ urn: node.data.urn, type: node.data.type });
+        }
+    };
 
     useEffect(() => {
         if (asyncLineageData && asyncLineageData.entity && !hasExpanded && !loading) {
@@ -135,6 +165,16 @@ export default function LineageEntityNode({
     const entityName =
         capitalizeFirstLetterOnly(node.data.subtype) ||
         (node.data.type && entityRegistry.getEntityName(node.data.type));
+
+    // Health
+    const { health } = node.data;
+    const baseUrl = node.data.type && node.data.urn && entityRegistry.getEntityUrl(node.data.type, node.data.urn);
+    const hasHealth = (health && baseUrl) || false;
+
+    const entityStructuredProps = node.data.structuredProperties;
+    const hasAssetBadge = entityStructuredProps?.properties?.find(filterForAssetBadge);
+    const siblingStructuredProps = node.data.siblingStructuredProperties;
+    const siblingHasAssetBadge = siblingStructuredProps?.properties?.find(filterForAssetBadge);
 
     return (
         <PointerGroup data-testid={`node-${node.data.urn}-${direction}`} top={node.x} left={node.y}>
@@ -225,7 +265,7 @@ export default function LineageEntityNode({
                     </g>
                 ))}
             <Group
-                onDoubleClick={() => onEntityCenter({ urn: node.data.urn, type: node.data.type })}
+                onDoubleClick={centerEntity}
                 onClick={(event) => {
                     if (
                         event.timeStamp < lastMouseDownCoordinates.ts + CLICK_DELAY_THRESHOLD &&
@@ -305,25 +345,53 @@ export default function LineageEntityNode({
                         {entityRegistry.getIcon(node.data.type, 16, IconStyleType.SVG)}
                     </svg>
                 )}
-                <foreignObject
-                    x={-centerX - 25}
-                    y={centerY + 20}
-                    width={20}
-                    height={20}
-                    onClick={(e) => e.stopPropagation()}
-                >
-                    <ManageLineageMenu
-                        entityUrn={node.data.urn || ''}
-                        refetchEntity={fetchEntityLineage}
-                        setUpdatedLineages={setUpdatedLineages}
-                        disableUpstream={!isCenterNode && direction === Direction.Downstream}
-                        disableDownstream={!isCenterNode && direction === Direction.Upstream}
-                        centerEntity={() => onEntityCenter({ urn: node.data.urn, type: node.data.type })}
-                        entityType={node.data.type}
-                        entityPlatform={node.data.platform?.name}
-                        canEditLineage={node.data.canEditLineage}
-                    />
-                </foreignObject>
+                {!isRestricted && (
+                    <foreignObject
+                        x={-centerX - 25}
+                        y={centerY + 20}
+                        width={20}
+                        height={20}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <ManageLineageMenu
+                            entityUrn={node.data.urn || ''}
+                            refetchEntity={fetchEntityLineage}
+                            setUpdatedLineages={setUpdatedLineages}
+                            disableUpstream={!isCenterNode && direction === Direction.Downstream}
+                            disableDownstream={!isCenterNode && direction === Direction.Upstream}
+                            centerEntity={() => onEntityCenter({ urn: node.data.urn, type: node.data.type })}
+                            entityType={node.data.type}
+                            entityPlatform={node.data.platform?.name}
+                            canEditLineage={node.data.canEditLineage}
+                        />
+                    </foreignObject>
+                )}
+                {hasAssetBadge && (
+                    <foreignObject
+                        x={-centerX - MAX_PROP_BADGE_WIDTH - 8}
+                        y={centerY - 15}
+                        width={MAX_PROP_BADGE_WIDTH}
+                        height={30}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <PropertyBadgeWrapper>
+                            <StructuredPropertyBadge structuredProperties={entityStructuredProps ?? undefined} />
+                        </PropertyBadgeWrapper>
+                    </foreignObject>
+                )}
+                {!hasAssetBadge && siblingHasAssetBadge && (
+                    <foreignObject
+                        x={-centerX - MAX_PROP_BADGE_WIDTH - 8}
+                        y={centerY - 15}
+                        width={MAX_PROP_BADGE_WIDTH}
+                        height={30}
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <PropertyBadgeWrapper>
+                            <StructuredPropertyBadge structuredProperties={siblingStructuredProps ?? undefined} />
+                        </PropertyBadgeWrapper>
+                    </foreignObject>
+                )}
                 <Group>
                     <UnselectableText
                         dy="-1em"
@@ -334,11 +402,15 @@ export default function LineageEntityNode({
                         textAnchor="start"
                         fill="#8C8C8C"
                     >
-                        <tspan>{getShortenedTitle(platformDisplayText || '', width)}</tspan>
-                        <tspan dx=".25em" dy="2px" fill="#dadada" fontSize={12} fontWeight="normal">
-                            {' '}
-                            |{' '}
-                        </tspan>
+                        {platformDisplayText && (
+                            <>
+                                <tspan>{getShortenedTitle(platformDisplayText || '', width)}</tspan>
+                                <tspan dx=".25em" dy="2px" fill="#dadada" fontSize={12} fontWeight="normal">
+                                    {' '}
+                                    |{' '}
+                                </tspan>
+                            </>
+                        )}
                         <tspan dx=".25em" dy="-2px" data-testid={entityName}>
                             {entityName}
                         </tspan>
@@ -359,6 +431,16 @@ export default function LineageEntityNode({
                             {getShortenedTitle(node.data.name, width)}
                         </UnselectableText>
                     )}
+                    <foreignObject x={healthX} y={healthY} width="20" height="20">
+                        {hasHealth && (
+                            <EntityHealth
+                                health={health as any}
+                                baseUrl={baseUrl as any}
+                                fontSize={20}
+                                tooltipPlacement="top"
+                            />
+                        )}
+                    </foreignObject>
                 </Group>
                 {unexploredHiddenChildren && isHovered ? (
                     <UnselectableText

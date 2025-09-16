@@ -1,24 +1,33 @@
 package com.linkedin.metadata.systemmetadata;
 
+import static io.datahubproject.metadata.context.SystemTelemetryContext.TELEMETRY_TRACE_KEY;
+
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableMap;
+import com.linkedin.common.urn.Urn;
+import com.linkedin.common.urn.UrnUtils;
+import com.linkedin.data.template.SetMode;
+import com.linkedin.metadata.config.SystemMetadataServiceConfig;
 import com.linkedin.metadata.run.AspectRowSummary;
 import com.linkedin.metadata.run.IngestionRunSummary;
 import com.linkedin.metadata.search.elasticsearch.indexbuilder.ESIndexBuilder;
 import com.linkedin.metadata.search.elasticsearch.indexbuilder.ReindexConfig;
 import com.linkedin.metadata.search.elasticsearch.update.ESBulkProcessor;
-import com.linkedin.metadata.search.utils.ESUtils;
 import com.linkedin.metadata.shared.ElasticSearchIndexed;
 import com.linkedin.metadata.utils.elasticsearch.IndexConvention;
 import com.linkedin.mxe.SystemMetadata;
+import com.linkedin.structured.StructuredPropertyDefinition;
+import com.linkedin.util.Pair;
+import io.datahubproject.metadata.context.OperationContext;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -29,38 +38,48 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import javax.annotation.Nonnull;
 import javax.annotation.Nullable;
+import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.elasticsearch.action.search.SearchResponse;
-import org.elasticsearch.client.tasks.GetTaskResponse;
-import org.elasticsearch.index.query.QueryBuilders;
-import org.elasticsearch.search.SearchHits;
-import org.elasticsearch.search.aggregations.bucket.filter.ParsedFilter;
-import org.elasticsearch.search.aggregations.bucket.terms.ParsedStringTerms;
-import org.elasticsearch.search.aggregations.bucket.terms.Terms;
-import org.elasticsearch.search.aggregations.metrics.ParsedMax;
-
+import org.opensearch.action.search.SearchResponse;
+import org.opensearch.client.tasks.GetTaskResponse;
+import org.opensearch.index.query.BoolQueryBuilder;
+import org.opensearch.index.query.QueryBuilders;
+import org.opensearch.search.SearchHits;
+import org.opensearch.search.aggregations.bucket.filter.ParsedFilter;
+import org.opensearch.search.aggregations.bucket.terms.ParsedStringTerms;
+import org.opensearch.search.aggregations.bucket.terms.Terms;
+import org.opensearch.search.aggregations.metrics.ParsedMax;
 
 @Slf4j
 @RequiredArgsConstructor
-public class ElasticSearchSystemMetadataService implements SystemMetadataService, ElasticSearchIndexed {
+public class ElasticSearchSystemMetadataService
+    implements SystemMetadataService, ElasticSearchIndexed {
 
   private final ESBulkProcessor _esBulkProcessor;
   private final IndexConvention _indexConvention;
   private final ESSystemMetadataDAO _esDAO;
   private final ESIndexBuilder _indexBuilder;
+  @Nonnull private final String elasticIdHashAlgo;
+  @Getter private final SystemMetadataServiceConfig systemMetadataServiceConfig;
 
   private static final String DOC_DELIMETER = "--";
   public static final String INDEX_NAME = "system_metadata_service_v1";
-  private static final String FIELD_URN = "urn";
-  private static final String FIELD_ASPECT = "aspect";
+  public static final String FIELD_URN = "urn";
+  public static final String FIELD_ASPECT = "aspect";
   private static final String FIELD_RUNID = "runId";
-  private static final String FIELD_LAST_UPDATED = "lastUpdated";
+  public static final String FIELD_LAST_UPDATED = "lastUpdated";
   private static final String FIELD_REGISTRY_NAME = "registryName";
   private static final String FIELD_REGISTRY_VERSION = "registryVersion";
-  private static final Set<String> INDEX_FIELD_SET = new HashSet<>(
-      Arrays.asList(FIELD_URN, FIELD_ASPECT, FIELD_RUNID, FIELD_LAST_UPDATED, FIELD_REGISTRY_NAME,
-          FIELD_REGISTRY_VERSION));
+  private static final Set<String> INDEX_FIELD_SET =
+      new HashSet<>(
+          Arrays.asList(
+              FIELD_URN,
+              FIELD_ASPECT,
+              FIELD_RUNID,
+              FIELD_LAST_UPDATED,
+              FIELD_REGISTRY_NAME,
+              FIELD_REGISTRY_VERSION));
 
   private String toDocument(SystemMetadata systemMetadata, String urn, String aspect) {
     final ObjectNode document = JsonNodeFactory.instance.objectNode();
@@ -72,21 +91,37 @@ public class ElasticSearchSystemMetadataService implements SystemMetadataService
     document.put("registryName", systemMetadata.getRegistryName());
     document.put("registryVersion", systemMetadata.getRegistryVersion());
     document.put("removed", false);
+    if (systemMetadata.getAspectCreated() != null) {
+      document.put("aspectCreatedTime", systemMetadata.getAspectCreated().getTime());
+      document.put("aspectCreatedActor", systemMetadata.getAspectCreated().getActor().toString());
+    }
+    if (systemMetadata.getAspectModified() != null) {
+      document.put("aspectModifiedTime", systemMetadata.getAspectModified().getTime());
+      document.put("aspectModifiedActor", systemMetadata.getAspectModified().getActor().toString());
+    }
+    if (systemMetadata.getProperties() != null
+        && systemMetadata.getProperties().containsKey(TELEMETRY_TRACE_KEY)) {
+      document.put(TELEMETRY_TRACE_KEY, systemMetadata.getProperties().get(TELEMETRY_TRACE_KEY));
+    }
     return document.toString();
   }
 
   private String toDocId(@Nonnull final String urn, @Nonnull final String aspect) {
     String rawDocId = urn + DOC_DELIMETER + aspect;
-
     try {
       byte[] bytesOfRawDocID = rawDocId.getBytes(StandardCharsets.UTF_8);
-      MessageDigest md = MessageDigest.getInstance("MD5");
+      MessageDigest md = MessageDigest.getInstance(elasticIdHashAlgo);
       byte[] thedigest = md.digest(bytesOfRawDocID);
       return Base64.getEncoder().encodeToString(thedigest);
     } catch (NoSuchAlgorithmException e) {
       e.printStackTrace();
       return rawDocId;
     }
+  }
+
+  @Override
+  public ESIndexBuilder getIndexBuilder() {
+    return _indexBuilder;
   }
 
   @Override
@@ -110,14 +145,19 @@ public class ElasticSearchSystemMetadataService implements SystemMetadataService
     // If status.removed -> false (from removed to not removed) --> get soft deleted entities.
     // If status.removed -> true (from not removed to removed) --> do not get soft deleted entities.
     final List<AspectRowSummary> aspectList =
-        findByParams(ImmutableMap.of("urn", urn), !removed, 0, ESUtils.MAX_RESULT_SIZE);
+        findByParams(
+            ImmutableMap.of("urn", urn),
+            !removed,
+            0,
+            systemMetadataServiceConfig.getLimit().getResults().getApiDefault());
     // for each -> toDocId and set removed to true for all
-    aspectList.forEach(aspect -> {
-      final String docId = toDocId(aspect.getUrn(), aspect.getAspectName());
-      final ObjectNode document = JsonNodeFactory.instance.objectNode();
-      document.put("removed", removed);
-      _esDAO.upsertDocument(docId, document.toString());
-    });
+    aspectList.forEach(
+        aspect -> {
+          final String docId = toDocId(aspect.getUrn(), aspect.getAspectName());
+          final ObjectNode document = JsonNodeFactory.instance.objectNode();
+          document.put("removed", removed);
+          _esDAO.upsertDocument(docId, document.toString());
+        });
   }
 
   @Override
@@ -133,45 +173,47 @@ public class ElasticSearchSystemMetadataService implements SystemMetadataService
   }
 
   @Override
-  public List<AspectRowSummary> findByRunId(String runId, boolean includeSoftDeleted, int from, int size) {
-    return findByParams(Collections.singletonMap(FIELD_RUNID, runId), includeSoftDeleted, from, size);
+  public List<AspectRowSummary> findByRunId(
+      String runId, boolean includeSoftDeleted, int from, @Nullable Integer size) {
+    return findByParams(
+        Collections.singletonMap(FIELD_RUNID, runId), includeSoftDeleted, from, size);
   }
 
   @Override
-  public List<AspectRowSummary> findByUrn(String urn, boolean includeSoftDeleted, int from, int size) {
+  public List<AspectRowSummary> findByUrn(
+      String urn, boolean includeSoftDeleted, int from, @Nullable Integer size) {
     return findByParams(Collections.singletonMap(FIELD_URN, urn), includeSoftDeleted, from, size);
   }
 
   @Override
-  public List<AspectRowSummary> findByParams(Map<String, String> systemMetaParams, boolean includeSoftDeleted, int from,
-      int size) {
-    SearchResponse searchResponse = _esDAO.findByParams(systemMetaParams, includeSoftDeleted, from, size);
-    if (searchResponse != null) {
-      SearchHits hits = searchResponse.getHits();
-      List<AspectRowSummary> summaries = Arrays.stream(hits.getHits()).map(hit -> {
-        Map<String, Object> values = hit.getSourceAsMap();
-        AspectRowSummary summary = new AspectRowSummary();
-        summary.setRunId((String) values.get(FIELD_RUNID));
-        summary.setAspectName((String) values.get(FIELD_ASPECT));
-        summary.setUrn((String) values.get(FIELD_URN));
-        Object timestamp = values.get(FIELD_LAST_UPDATED);
-        if (timestamp instanceof Long) {
-          summary.setTimestamp((Long) timestamp);
-        } else if (timestamp instanceof Integer) {
-          summary.setTimestamp(Long.valueOf((Integer) timestamp));
-        }
-        summary.setKeyAspect(((String) values.get(FIELD_ASPECT)).endsWith("Key"));
-        return summary;
-      }).collect(Collectors.toList());
-      return summaries;
-    } else {
-      return Collections.emptyList();
-    }
+  public List<AspectRowSummary> findByParams(
+      Map<String, String> systemMetaParams,
+      boolean includeSoftDeleted,
+      int from,
+      @Nullable Integer size) {
+    SearchResponse searchResponse =
+        _esDAO.findByParams(systemMetaParams, includeSoftDeleted, from, size);
+    return toAspectRowSummary(searchResponse);
   }
 
   @Override
-  public List<AspectRowSummary> findByRegistry(String registryName, String registryVersion, boolean includeSoftDeleted,
-      int from, int size) {
+  public List<AspectRowSummary> findAspectsByUrn(
+      @Nonnull Urn urn, @Nonnull List<String> aspects, boolean includeSoftDeleted) {
+    BoolQueryBuilder boolQueryBuilder = QueryBuilders.boolQuery();
+    boolQueryBuilder.filter(QueryBuilders.termQuery(FIELD_URN, urn.toString()));
+    boolQueryBuilder.filter(QueryBuilders.termsQuery(FIELD_ASPECT, aspects));
+    SearchResponse searchResponse =
+        _esDAO.scroll(boolQueryBuilder, includeSoftDeleted, null, null, null, aspects.size());
+    return toAspectRowSummary(searchResponse);
+  }
+
+  @Override
+  public List<AspectRowSummary> findByRegistry(
+      String registryName,
+      String registryVersion,
+      boolean includeSoftDeleted,
+      int from,
+      @Nullable Integer size) {
     Map<String, String> registryParams = new HashMap<>();
     registryParams.put(FIELD_REGISTRY_NAME, registryName);
     registryParams.put(FIELD_REGISTRY_VERSION, registryVersion);
@@ -179,33 +221,41 @@ public class ElasticSearchSystemMetadataService implements SystemMetadataService
   }
 
   @Override
-  public List<IngestionRunSummary> listRuns(Integer pageOffset, Integer pageSize, boolean includeSoftDeleted) {
+  public List<IngestionRunSummary> listRuns(
+      Integer pageOffset, Integer pageSize, boolean includeSoftDeleted) {
     SearchResponse response = _esDAO.findRuns(pageOffset, pageSize);
-    List<? extends Terms.Bucket> buckets = ((ParsedStringTerms) response.getAggregations().get("runId")).getBuckets();
+    List<? extends Terms.Bucket> buckets =
+        ((ParsedStringTerms) response.getAggregations().get("runId")).getBuckets();
 
     if (!includeSoftDeleted) {
-      buckets.removeIf(bucket -> {
-        long totalDocs = bucket.getDocCount();
-        long softDeletedDocs = ((ParsedFilter) bucket.getAggregations().get("removed")).getDocCount();
-        return totalDocs == softDeletedDocs;
-      });
+      buckets.removeIf(
+          bucket -> {
+            long totalDocs = bucket.getDocCount();
+            long softDeletedDocs =
+                ((ParsedFilter) bucket.getAggregations().get("removed")).getDocCount();
+            return totalDocs == softDeletedDocs;
+          });
     }
 
     // TODO(gabe-lyons): add sample urns
-    return buckets.stream().map(bucket -> {
-      IngestionRunSummary entry = new IngestionRunSummary();
-      entry.setRunId(bucket.getKeyAsString());
-      entry.setTimestamp((long) ((ParsedMax) bucket.getAggregations().get("maxTimestamp")).getValue());
-      entry.setRows(bucket.getDocCount());
-      return entry;
-    }).collect(Collectors.toList());
+    return buckets.stream()
+        .map(
+            bucket -> {
+              IngestionRunSummary entry = new IngestionRunSummary();
+              entry.setRunId(bucket.getKeyAsString());
+              entry.setTimestamp(
+                  (long) ((ParsedMax) bucket.getAggregations().get("maxTimestamp")).getValue());
+              entry.setRows(bucket.getDocCount());
+              return entry;
+            })
+        .collect(Collectors.toList());
   }
 
   @Override
-  public void configure() {
+  public void reindexAll(Collection<Pair<Urn, StructuredPropertyDefinition>> properties) {
     log.info("Setting up system metadata index");
     try {
-      for (ReindexConfig config : getReindexConfigs()) {
+      for (ReindexConfig config : buildReindexConfigs(properties)) {
         _indexBuilder.buildIndex(config);
       }
     } catch (IOException ie) {
@@ -214,19 +264,119 @@ public class ElasticSearchSystemMetadataService implements SystemMetadataService
   }
 
   @Override
-  public List<ReindexConfig> getReindexConfigs() throws IOException {
-    return List.of(_indexBuilder.buildReindexState(_indexConvention.getIndexName(INDEX_NAME),
-            SystemMetadataMappingsBuilder.getMappings(), Collections.emptyMap()));
+  public List<ReindexConfig> buildReindexConfigs(
+      Collection<Pair<Urn, StructuredPropertyDefinition>> properties) throws IOException {
+    return List.of(
+        _indexBuilder.buildReindexState(
+            _indexConvention.getIndexName(INDEX_NAME),
+            SystemMetadataMappingsBuilder.getMappings(),
+            Collections.emptyMap()));
   }
 
-  @Override
-  public void reindexAll() {
-    configure();
-  }
-
-  @VisibleForTesting
   @Override
   public void clear() {
-    _esBulkProcessor.deleteByQuery(QueryBuilders.matchAllQuery(), true, _indexConvention.getIndexName(INDEX_NAME));
+    _esBulkProcessor.deleteByQuery(
+        QueryBuilders.matchAllQuery(), true, _indexConvention.getIndexName(INDEX_NAME));
+  }
+
+  @Override
+  public Map<Urn, Map<String, Map<String, Object>>> raw(
+      OperationContext opContext, Map<String, Set<String>> urnAspects) {
+
+    if (urnAspects == null || urnAspects.isEmpty()) {
+      return Collections.emptyMap();
+    }
+
+    Map<Urn, Map<String, Map<String, Object>>> result = new HashMap<>();
+
+    // Build a list of all document IDs we need to fetch
+    List<String> docIds = new ArrayList<>();
+    for (Map.Entry<String, Set<String>> entry : urnAspects.entrySet()) {
+      String urnString = entry.getKey();
+      Set<String> aspects = entry.getValue();
+
+      if (aspects != null && !aspects.isEmpty()) {
+        for (String aspect : aspects) {
+          docIds.add(toDocId(urnString, aspect));
+        }
+      }
+    }
+
+    if (docIds.isEmpty()) {
+      return Collections.emptyMap();
+    }
+
+    // Query for all documents by their IDs
+    BoolQueryBuilder query = QueryBuilders.boolQuery();
+    query.filter(QueryBuilders.idsQuery().addIds(docIds.toArray(new String[0])));
+
+    // Use scroll to retrieve all matching documents
+    SearchResponse searchResponse =
+        _esDAO.scroll(
+            query,
+            true,
+            null, // scrollId
+            null, // pitId
+            null, // keepAlive
+            systemMetadataServiceConfig.getLimit().getResults().getApiDefault());
+
+    if (searchResponse != null && searchResponse.getHits() != null) {
+      SearchHits hits = searchResponse.getHits();
+
+      // Process each hit
+      Arrays.stream(hits.getHits())
+          .forEach(
+              hit -> {
+                Map<String, Object> sourceMap = hit.getSourceAsMap();
+                String urnString = (String) sourceMap.get(FIELD_URN);
+                String aspectName = (String) sourceMap.get(FIELD_ASPECT);
+
+                if (urnString != null && aspectName != null) {
+                  try {
+                    Urn urn = UrnUtils.getUrn(urnString);
+
+                    // Get or create the aspect map for this URN
+                    Map<String, Map<String, Object>> aspectDocuments =
+                        result.computeIfAbsent(urn, k -> new HashMap<>());
+
+                    // Store the raw document for this aspect
+                    aspectDocuments.put(aspectName, sourceMap);
+
+                  } catch (Exception e) {
+                    log.error("Error parsing URN {} in raw method: {}", urnString, e.getMessage());
+                  }
+                }
+              });
+    }
+
+    return result;
+  }
+
+  private static List<AspectRowSummary> toAspectRowSummary(SearchResponse searchResponse) {
+    if (searchResponse != null) {
+      SearchHits hits = searchResponse.getHits();
+      return Arrays.stream(hits.getHits())
+          .map(
+              hit -> {
+                Map<String, Object> values = hit.getSourceAsMap();
+                AspectRowSummary summary = new AspectRowSummary();
+                summary.setRunId((String) values.get(FIELD_RUNID));
+                summary.setAspectName((String) values.get(FIELD_ASPECT));
+                summary.setUrn((String) values.get(FIELD_URN));
+                Object timestamp = values.get(FIELD_LAST_UPDATED);
+                if (timestamp instanceof Long) {
+                  summary.setTimestamp((Long) timestamp);
+                } else if (timestamp instanceof Integer) {
+                  summary.setTimestamp(Long.valueOf((Integer) timestamp));
+                }
+                summary.setKeyAspect(((String) values.get(FIELD_ASPECT)).endsWith("Key"));
+                summary.setTelemetryTraceId(
+                    (String) values.get(TELEMETRY_TRACE_KEY), SetMode.IGNORE_NULL);
+                return summary;
+              })
+          .collect(Collectors.toList());
+    } else {
+      return Collections.emptyList();
+    }
   }
 }

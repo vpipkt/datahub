@@ -1,9 +1,11 @@
 import { Button, Modal, message } from 'antd';
 import React, { useState } from 'react';
-import DataProductBuilderForm from './DataProductBuilderForm';
-import { DataProductBuilderState } from './types';
-import { useCreateDataProductMutation } from '../../../../graphql/dataProduct.generated';
-import { DataProduct, Domain } from '../../../../types.generated';
+
+import DataProductBuilderForm from '@app/entity/domain/DataProductsTab/DataProductBuilderForm';
+import { DataProductBuilderState } from '@app/entity/domain/DataProductsTab/types';
+
+import { useCreateDataProductMutation } from '@graphql/dataProduct.generated';
+import { DataProduct, Domain } from '@types';
 
 export const MODAL_WIDTH = '75vw';
 
@@ -32,6 +34,7 @@ export default function CreateDataProductModal({ domain, onCreateDataProduct, on
             variables: {
                 input: {
                     domainUrn: domain.urn,
+                    id: builderState.id,
                     properties: {
                         name: builderState.name,
                         description: builderState.description || undefined,
@@ -49,10 +52,10 @@ export default function CreateDataProductModal({ domain, onCreateDataProduct, on
                     onClose();
                 }
             })
-            .catch(() => {
+            .catch((error) => {
                 onClose();
                 message.destroy();
-                message.error({ content: 'Failed to create Data Product. An unexpected error occurred' });
+                message.error({ content: `Failed to create Data Product: ${error.message}.` });
             });
     }
 

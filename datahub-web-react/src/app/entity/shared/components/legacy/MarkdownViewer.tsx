@@ -1,7 +1,7 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Button } from 'antd';
 import { EditOutlined } from '@ant-design/icons';
 import MDEditor from '@uiw/react-md-editor';
+import { Button } from 'antd';
+import React, { useEffect, useRef, useState } from 'react';
 import styled from 'styled-components';
 
 const EditIcon = styled(EditOutlined)`
@@ -76,6 +76,7 @@ export const MarkdownView = styled(MDEditor.Markdown)`
 export type Props = {
     source: string;
     limit?: number;
+    // eslint-disable-next-line react/no-unused-prop-types
     isCompact?: boolean;
     editable?: boolean;
     onEditClicked?: () => void;

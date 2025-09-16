@@ -10,11 +10,11 @@ You're probably using a Java version that's too new for gradle. Run the followin
 java --version
 ```
 
-While it may be possible to build and run DataHub using newer versions of Java, we currently only support [Java 11](https://openjdk.org/projects/jdk/11/) (aka Java 11).
+While it may be possible to build and run DataHub using newer versions of Java, we currently only support [Java 17](https://openjdk.org/projects/jdk/17/) (aka Java 17).
 
 ## Getting `cannot find symbol` error for `javax.annotation.Generated`
 
-Similar to the previous issue, please use Java 1.8 to build the project.
+Similar to the previous issue, please use Java 17 to build the project.
 You can install multiple version of Java on a single machine and switch between them using the `JAVA_HOME` environment variable. See [this document](https://docs.oracle.com/cd/E21454_01/html/821-2531/inst_jdk_javahome_t.html) for more details.
 
 ## `:metadata-models:generateDataTemplate` task fails with `java.nio.file.InvalidPathException: Illegal char <:> at index XX` or `Caused by: java.lang.IllegalArgumentException: 'other' has different root` error
@@ -23,7 +23,7 @@ This is a [known issue](https://github.com/linkedin/rest.li/issues/287) when bui
 
 ## Various errors related to `generateDataTemplate` or other `generate` tasks
 
-As we generate quite a few files from the models, it is possible that old generated files may conflict with new model changes. When this happens, a simple `./gradlew clean` should reosolve the issue.
+As we generate quite a few files from the models, it is possible that old generated files may conflict with new model changes. When this happens, a simple `./gradlew clean` should resolve the issue.
 
 ## `Execution failed for task ':metadata-service:restli-servlet-impl:checkRestModel'`
 

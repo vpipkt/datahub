@@ -1,15 +1,19 @@
+import { Checkbox, Radio } from 'antd';
 import React from 'react';
-import { Checkbox } from 'antd';
 import styled from 'styled-components';
-import { EntityPath, EntityType, SearchResult } from '../../../../../../types.generated';
-import { EntityAndType } from '../../../types';
-import { useEntityRegistry } from '../../../../../useEntityRegistry';
-import { ListItem, StyledList, ThinDivider } from '../../../../../recommendations/renderer/component/EntityNameList';
+
+import { EntityAndType } from '@app/entity/shared/types';
+import { ListItem, StyledList, ThinDivider } from '@app/recommendations/renderer/component/EntityNameList';
+import { useEntityRegistry } from '@app/useEntityRegistry';
+
+import { EntityPath, EntityType, SearchResult } from '@types';
 
 const StyledCheckbox = styled(Checkbox)`
     margin-right: 12px;
 `;
-
+const StyledRadio = styled(Radio)`
+    margin-right: 12px;
+`;
 export type EntityActionProps = {
     urn: string;
     type: EntityType;
@@ -30,6 +34,7 @@ type Props = {
     selectedEntities?: EntityAndType[];
     setSelectedEntities?: (entities: EntityAndType[]) => any;
     bordered?: boolean;
+    singleSelect?: boolean;
     entityAction?: React.FC<EntityActionProps>;
 };
 
@@ -40,6 +45,7 @@ export const EntitySearchResults = ({
     selectedEntities = [],
     setSelectedEntities,
     bordered = true,
+    singleSelect,
     entityAction,
 }: Props) => {
     const entityRegistry = useEntityRegistry();
@@ -60,7 +66,9 @@ export const EntitySearchResults = ({
      * Invoked when a new entity is selected. Simply updates the state of the list of selected entities.
      */
     const onSelectEntity = (selectedEntity: EntityAndType, selected: boolean) => {
-        if (selected) {
+        if (singleSelect && selected) {
+            setSelectedEntities?.([selectedEntity]);
+        } else if (selected) {
             setSelectedEntities?.([...selectedEntities, selectedEntity]);
         } else {
             setSelectedEntities?.(selectedEntities?.filter((entity) => entity.urn !== selectedEntity.urn) || []);
@@ -78,14 +86,31 @@ export const EntitySearchResults = ({
                 return (
                     <>
                         <ListItem isSelectMode={isSelectMode || false}>
-                            {isSelectMode && (
-                                <StyledCheckbox
-                                    checked={selectedEntityUrns.indexOf(entity.urn) >= 0}
-                                    onChange={(e) =>
-                                        onSelectEntity({ urn: entity.urn, type: entity.type }, e.target.checked)
-                                    }
-                                />
-                            )}
+                            {singleSelect
+                                ? isSelectMode && (
+                                      <StyledRadio
+                                          className="radioButton"
+                                          checked={selectedEntityUrns.indexOf(entity.urn) >= 0}
+                                          onChange={(e) =>
+                                              onSelectEntity(
+                                                  {
+                                                      urn: entity.urn,
+                                                      type: entity.type,
+                                                  },
+                                                  e.target.checked,
+                                              )
+                                          }
+                                      />
+                                  )
+                                : isSelectMode && (
+                                      <StyledCheckbox
+                                          data-testid={`checkbox-${entity.urn}`}
+                                          checked={selectedEntityUrns.indexOf(entity.urn) >= 0}
+                                          onChange={(e) =>
+                                              onSelectEntity({ urn: entity.urn, type: entity.type }, e.target.checked)
+                                          }
+                                      />
+                                  )}
                             {entityRegistry.renderSearchResult(entity.type, searchResult)}
                             {entityAction && <EntityAction urn={entity.urn} type={entity.type} />}
                         </ListItem>
